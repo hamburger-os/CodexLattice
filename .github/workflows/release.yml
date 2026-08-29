@@ -46,11 +46,16 @@ jobs:
           npm pack --json > pack.json
           node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('pack.json','utf8'))[0]; fs.appendFileSync(process.env.GITHUB_ENV, 'TARBALL='+p.filename+'\n');"
           sha256sum "$(node -p "JSON.parse(require('fs').readFileSync('pack.json','utf8'))[0].filename")" > SHA256SUMS.txt
-      - name: Verify tarball installs cleanly
+      - name: Verify tarball installs cleanly and reports manifest version
         run: |
           PREFIX="$(mktemp -d)"
           npm install --global --prefix "$PREFIX" "./$TARBALL"
-          "$PREFIX/bin/codex-lattice" version
+          EXPECTED_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")"
+          ACTUAL_VERSION="$("$PREFIX/bin/codex-lattice" version)"
+          if [ "$ACTUAL_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "installed CLI version $ACTUAL_VERSION does not match package.json $EXPECTED_VERSION" >&2
+            exit 1
+          fi
       - name: Create or refresh GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
