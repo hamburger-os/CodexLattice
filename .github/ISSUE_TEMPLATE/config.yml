@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Installation documentation
+    url: https://github.com/hamburger-os/CodexLattice/blob/main/docs/installation.md
+    about: Check installation behavior and configuration coexistence before filing an issue.
+  - name: Evaluation roadmap
+    url: https://github.com/hamburger-os/CodexLattice/issues/1
+    about: Follow paired-evaluation and calibration work.

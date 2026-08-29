@@ -1,0 +1,32 @@
+name: Feature request
+description: Propose a focused improvement to routing, UX, docs, or tooling
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or maintainer problem should be solved?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: textarea
+    id: quality
+    attributes:
+      label: Quality and safety impact
+      description: Could this change lower the quality floor, alter config ownership, or change Codex compatibility?
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or evaluation plan
+      description: For routing claims, what test or paired evaluation would support the change?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

@@ -1,0 +1,51 @@
+name: Codex compatibility report
+description: Report behavior after a Codex CLI update or platform-specific install issue
+title: "[Compatibility]: "
+body:
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+    validations:
+      required: true
+  - type: input
+    id: codex
+    attributes:
+      label: Codex CLI version
+      placeholder: codex --version
+    validations:
+      required: true
+  - type: input
+    id: lattice
+    attributes:
+      label: CodexLattice version
+      placeholder: codex-lattice version
+    validations:
+      required: true
+  - type: textarea
+    id: install
+    attributes:
+      label: Installation / upgrade path
+      description: Explain how Codex and CodexLattice were installed or upgraded.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Sanitized `doctor --strict` output
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Observed compatibility result
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed tokens, credentials, private prompts, and proprietary source code.
+          required: true
