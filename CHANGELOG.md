@@ -10,11 +10,26 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 - safe plan-only-by-default evaluation runner for adaptive, Sol-medium, Sol-high, and Terra-medium baselines;
 - protected evaluator-file restoration so benchmark runners cannot pass by weakening tests;
 - machine-readable result schema, ignored raw artifact storage, and coverage-aware result summarization;
-- CI evaluation contract that validates the corpus and runner plan without authenticated or paid model calls.
+- frozen calibration/holdout study contract with a reproducible seeded paired execution order;
+- Wilson 95% pass-rate intervals for evaluation summaries;
+- blind-grading bundle generation with a separately stored de-blinding key and validated grade merge workflow;
+- holdout-only fail-closed promotion gate that blocks incomplete evidence, quality regression, critical paired regression, and insufficient measured efficiency improvement;
+- sanitized public-evidence exporter that omits raw artifact paths, execution-error text, route traces, and reviewer notes;
+- CI evaluation contract that validates corpus, runner, study, and full seeded planning without authenticated or paid model calls;
+- weekly/manual cross-platform `@openai/codex@latest` structural compatibility canary.
+
+### Security and reliability
+
+- full-study execution refuses to append to an existing result set or reuse an existing study manifest;
+- blind grading refuses to overwrite an existing de-blinding key, and grade application rejects duplicate blind IDs, ambiguous key mappings, duplicate raw run IDs, and mappings to unknown runs;
+- promotion requires current corpus/runner versions, duplicate-free paired trials, and matching candidate/baseline execution environments;
+- public evidence export rejects both mixed versions and a single internally consistent but stale corpus or runner-config version.
 
 ### Documentation
 
-- expanded evaluation protocol for repeated paired trials, blind grading, usage coverage, calibration/holdout separation, and evidence publication.
+- expanded evaluation protocol for frozen study design, repeated paired trials, blind grading, uncertainty, usage coverage, promotion gating, calibration/holdout separation, and sanitized evidence publication;
+- documented the Codex App support boundary: shared Codex configuration compatibility is a target, while native App UI orchestration is not claimed without desktop verification;
+- synchronized English/Chinese README, compatibility policy, research notes, issue-reporting guidance, and roadmap with the implemented evidence controls and remaining external evidence work.
 
 ## 0.2.7
 

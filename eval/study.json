@@ -1,0 +1,33 @@
+{
+  "version": "1",
+  "seed": "codex-lattice-v0.3-study-1",
+  "gradingSeed": "codex-lattice-v0.3-blind-1",
+  "splits": {
+    "calibration": [
+      "easy-slugify",
+      "medium-retry",
+      "hard-toposort",
+      "critical-authorization"
+    ],
+    "holdout": [
+      "easy-dedupe",
+      "medium-config-merge",
+      "hard-map-limit",
+      "critical-migration-guard"
+    ]
+  },
+  "promotion": {
+    "candidate": "adaptive",
+    "baseline": "sol-high",
+    "minTrialsPerTask": 3,
+    "requireHumanScores": true,
+    "maxPassRateDrop": 0,
+    "maxMeanScoreDrop": 0,
+    "requireCriticalNoRegression": true,
+    "efficiency": {
+      "metric": "reasoningTokens",
+      "minCoverage": 1,
+      "maxRatio": 0.95
+    }
+  }
+}
