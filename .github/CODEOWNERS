@@ -1,0 +1,6 @@
+* @hamburger-os
+
+/src/ @hamburger-os
+/bin/ @hamburger-os
+/.github/workflows/ @hamburger-os
+/SECURITY.md @hamburger-os

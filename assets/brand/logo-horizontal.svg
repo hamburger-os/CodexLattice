@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 240" role="img" aria-labelledby="title desc">
+  <title id="title">CodexLattice</title>
+  <desc id="desc">CodexLattice logo with lattice routing mark and wordmark.</desc>
+  <rect width="980" height="240" rx="32" fill="#0B1020"/>
+  <g transform="translate(42 32) scale(.69)">
+    <g stroke="#7C83FD" stroke-width="8" stroke-linecap="round" opacity="0.72">
+      <path d="M56 56H128H200M56 128H128H200M56 200H128H200"/>
+      <path d="M56 56V128V200M128 56V128V200M200 56V128V200"/>
+    </g>
+    <path d="M56 200L128 128L200 56" fill="none" stroke="#5EEAD4" stroke-width="14" stroke-linecap="round"/>
+    <circle cx="56" cy="56" r="13" fill="#0B1020" stroke="#A5B4FC" stroke-width="8"/>
+    <circle cx="128" cy="56" r="13" fill="#0B1020" stroke="#A5B4FC" stroke-width="8"/>
+    <circle cx="200" cy="56" r="13" fill="#0B1020" stroke="#A5B4FC" stroke-width="8"/>
+    <circle cx="56" cy="128" r="13" fill="#0B1020" stroke="#A5B4FC" stroke-width="8"/>
+    <circle cx="200" cy="128" r="13" fill="#0B1020" stroke="#A5B4FC" stroke-width="8"/>
+    <circle cx="56" cy="200" r="13" fill="#0B1020" stroke="#A5B4FC" stroke-width="8"/>
+    <circle cx="128" cy="200" r="13" fill="#0B1020" stroke="#A5B4FC" stroke-width="8"/>
+    <circle cx="200" cy="200" r="13" fill="#0B1020" stroke="#A5B4FC" stroke-width="8"/>
+    <circle cx="128" cy="128" r="22" fill="#5EEAD4" stroke="#E6FFFB" stroke-width="7"/>
+  </g>
+  <text x="250" y="118" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="66" font-weight="750" letter-spacing="-2">CodexLattice</text>
+  <text x="253" y="165" fill="#A5B4FC" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="24" font-weight="500">quality-first reasoning orchestration</text>
+</svg>

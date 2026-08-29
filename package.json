@@ -11,6 +11,23 @@
   },
   "engines": {"node": ">=20"},
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hamburger-os/CodexLattice.git"
+  },
+  "homepage": "https://github.com/hamburger-os/CodexLattice#readme",
+  "bugs": {
+    "url": "https://github.com/hamburger-os/CodexLattice/issues"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "presets/",
+    "docs/",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
   "keywords": [
     "codex",
     "openai",

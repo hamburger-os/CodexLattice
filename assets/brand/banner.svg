@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 640" role="img" aria-labelledby="title desc">
+  <title id="title">CodexLattice</title>
+  <desc id="desc">Quality-first reasoning orchestration for Codex, visualized as routed paths through a lattice.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#090E1C"/>
+      <stop offset="1" stop-color="#111A33"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#5EEAD4" stop-opacity=".20"/>
+      <stop offset="1" stop-color="#5EEAD4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="640" rx="36" fill="url(#bg)"/>
+  <circle cx="1240" cy="320" r="300" fill="url(#glow)"/>
+
+  <g transform="translate(94 120)">
+    <g stroke="#7C83FD" stroke-width="7" stroke-linecap="round" opacity=".70">
+      <path d="M50 50H122H194M50 122H122H194M50 194H122H194"/>
+      <path d="M50 50V122V194M122 50V122V194M194 50V122V194"/>
+    </g>
+    <path d="M50 194L122 122L194 50" fill="none" stroke="#5EEAD4" stroke-width="13" stroke-linecap="round"/>
+    <g fill="#0B1020" stroke="#A5B4FC" stroke-width="7">
+      <circle cx="50" cy="50" r="12"/><circle cx="122" cy="50" r="12"/><circle cx="194" cy="50" r="12"/>
+      <circle cx="50" cy="122" r="12"/><circle cx="194" cy="122" r="12"/>
+      <circle cx="50" cy="194" r="12"/><circle cx="122" cy="194" r="12"/><circle cx="194" cy="194" r="12"/>
+    </g>
+    <circle cx="122" cy="122" r="20" fill="#5EEAD4" stroke="#E6FFFB" stroke-width="6"/>
+  </g>
+
+  <text x="94" y="410" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="76" font-weight="760" letter-spacing="-3">CodexLattice</text>
+  <text x="98" y="466" fill="#C7D2FE" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="29" font-weight="520">Quality-first reasoning orchestration for Codex.</text>
+  <text x="98" y="510" fill="#94A3B8" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="22">Plan · Explore · Execute · Verify</text>
+
+  <g transform="translate(900 120)" font-family="Inter, ui-sans-serif, system-ui, sans-serif">
+    <g stroke="#52618C" stroke-width="4" opacity=".75">
+      <path d="M30 70H230H430M30 200H230H430M30 330H230H430"/>
+      <path d="M30 70V200V330M230 70V200V330M430 70V200V330"/>
+    </g>
+    <path d="M30 330C130 330 128 202 230 200S330 75 430 70" fill="none" stroke="#5EEAD4" stroke-width="10" stroke-linecap="round"/>
+    <path d="M30 200C135 200 125 200 230 200" fill="none" stroke="#F4C95D" stroke-width="6" stroke-linecap="round" opacity=".85"/>
+    <g fill="#111A33" stroke="#8795C8" stroke-width="6">
+      <circle cx="30" cy="70" r="13"/><circle cx="230" cy="70" r="13"/><circle cx="430" cy="70" r="13"/>
+      <circle cx="30" cy="200" r="13"/><circle cx="430" cy="200" r="13"/>
+      <circle cx="30" cy="330" r="13"/><circle cx="230" cy="330" r="13"/><circle cx="430" cy="330" r="13"/>
+    </g>
+    <circle cx="230" cy="200" r="22" fill="#5EEAD4" stroke="#E6FFFB" stroke-width="7"/>
+    <text x="-2" y="390" fill="#94A3B8" font-size="20">Luna</text>
+    <text x="196" y="390" fill="#94A3B8" font-size="20">Terra</text>
+    <text x="404" y="390" fill="#94A3B8" font-size="20">Sol</text>
+  </g>
+</svg>

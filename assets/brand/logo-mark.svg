@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">CodexLattice mark</title>
+  <desc id="desc">A lattice of nodes with one routed path converging on a highlighted center node.</desc>
+  <rect width="256" height="256" rx="52" fill="#0B1020"/>
+  <g stroke="#7C83FD" stroke-width="8" stroke-linecap="round" opacity="0.72">
+    <path d="M56 56H128H200M56 128H128H200M56 200H128H200"/>
+    <path d="M56 56V128V200M128 56V128V200M200 56V128V200"/>
+  </g>
+  <path d="M56 200L128 128L200 56" fill="none" stroke="#5EEAD4" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#0B1020" stroke="#A5B4FC" stroke-width="8">
+    <circle cx="56" cy="56" r="13"/><circle cx="128" cy="56" r="13"/><circle cx="200" cy="56" r="13"/>
+    <circle cx="56" cy="128" r="13"/><circle cx="200" cy="128" r="13"/>
+    <circle cx="56" cy="200" r="13"/><circle cx="128" cy="200" r="13"/><circle cx="200" cy="200" r="13"/>
+  </g>
+  <circle cx="128" cy="128" r="22" fill="#5EEAD4" stroke="#E6FFFB" stroke-width="7"/>
+</svg>
