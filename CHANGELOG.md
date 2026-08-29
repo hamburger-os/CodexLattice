@@ -16,6 +16,18 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 
 - expanded evaluation protocol for repeated paired trials, blind grading, usage coverage, calibration/holdout separation, and evidence publication.
 
+## 0.2.7
+
+### Fixed
+
+- derive the running CodexLattice version from `package.json` instead of a stale hard-coded constant;
+- require real-Codex smoke tests to assert CLI and installation-receipt versions match the package manifest;
+- require release tarball verification to fail when the globally installed CLI reports a version different from the tagged package manifest.
+
+### Release integrity
+
+- keep the existing v0.2.6 tag and release immutable; version-integrity corrections are shipped only through the new v0.2.7 patch release.
+
 ## 0.2.6
 
 ### Added
