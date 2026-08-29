@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildPlan, shadowComparison } from '../src/policy.js';
+import { buildCodexExecArgs } from '../src/runtime.js';
 import { install, setMode, uninstall, codexHome } from '../src/installer.js';
 import {
   appendTelemetry,
@@ -16,26 +17,23 @@ import {
 const [cmd, ...args] = process.argv.slice(2);
 
 function help() {
-  console.log(`CodexLattice\n\nCommands:\n  install [adaptive|single]\n  mode <adaptive|single>\n  explain [--trace] <task>\n  shadow <task>\n  run <task>\n  telemetry <on|off|status|summarize> [jsonl-path]\n  feedback <run-id> <pass|fail|mixed> [note]\n  doctor\n  uninstall\n`);
+  console.log(`CodexLattice
+
+Commands:
+  install [adaptive|single]
+  mode <adaptive|single>
+  explain [--trace] <task>
+  shadow <task>
+  run <task>
+  telemetry <on|off|status|summarize> [jsonl-path]
+  feedback <run-id> <pass|fail|mixed> [note]
+  doctor
+  uninstall
+`);
 }
 
 function compactRoute(route) {
   return { model: route.model, effort: route.effort, quality: route.quality, cost: route.cost };
-}
-
-function orchestrationPrompt(task, plan) {
-  const promptPlan = {
-    policyVersion: plan.policyVersion,
-    objective: plan.objective,
-    features: plan.features,
-    stages: Object.fromEntries(Object.entries(plan.stages).map(([stage, route]) => [stage, {
-      model: route.model,
-      effort: route.effort,
-      parallelism: route.parallelism || 1
-    }])),
-    escalation: plan.escalation
-  };
-  return `You are running under CodexLattice adaptive orchestration.\n\nUSER TASK:\n${task}\n\nROUTE PLAN (quality-first; cost minimized only inside the near-optimal quality set):\n${JSON.stringify(promptPlan, null, 2)}\n\nPOLICY:\n1. Preserve correctness and user requirements before optimizing cost.\n2. Plan first for non-trivial work. Use lattice_planner when architectural ambiguity/risk justifies it.\n3. Use lattice_explorer in parallel only for independent repository questions; do not fan out serial dependencies.\n4. Use lattice_implementer for bounded workstreams. Prefer deterministic tests/static checks over model voting.\n5. Use lattice_reviewer for material changes or whenever deterministic validation is incomplete, agents disagree, or risk is elevated.\n6. Escalate model/effort only on evidence of failure, unresolved ambiguity, or high risk. Stop spawning agents when additional work is unlikely to change the result.\n7. If the task is simple, it is valid to do it directly without subagents.\n8. Return one coherent final result, including tests/checks performed and unresolved risks.\n`;
 }
 
 try {
@@ -120,8 +118,7 @@ try {
       executeRoute: compactRoute(plan.stages.execute),
       verifyRoute: compactRoute(plan.stages.verify)
     });
-    const prompt = orchestrationPrompt(task, plan);
-    const result = spawnSync('codex', ['exec', prompt], { stdio: 'inherit' });
+    const result = spawnSync('codex', buildCodexExecArgs(task, plan), { stdio: 'inherit' });
     appendTelemetry('run_finished', {
       runId,
       exitCode: result.status ?? 1,

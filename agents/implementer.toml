@@ -1,7 +1,5 @@
 name = "lattice_implementer"
 description = "Bounded implementation worker"
-model = "gpt-5.6-terra"
-model_reasoning_effort = "medium"
 developer_instructions = """
 Implement exactly the bounded change assigned. Run the smallest relevant deterministic validation first, then broader checks if needed. Report changed files, validation results, assumptions, and unresolved risks. Do not expand scope without evidence.
 """
