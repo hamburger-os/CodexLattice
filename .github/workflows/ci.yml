@@ -80,10 +80,12 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - name: Validate versioned evaluation corpus and runners
+      - name: Validate versioned evaluation corpus, runners, and study split
         run: npm run eval:validate
-      - name: Prove planning mode makes no model calls
+      - name: Prove single-pair planning mode makes no model calls
         run: npm run eval:plan -- --task easy-slugify --runner sol-medium
+      - name: Prove full seeded paired-study planning makes no model calls
+        run: npm run eval:plan -- --all --trials 1 > /dev/null
 
   required:
     name: required / ci
