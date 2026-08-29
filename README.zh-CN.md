@@ -19,11 +19,11 @@
 
 CodexLattice 根据任务和生命周期阶段，在规划、探索、执行和验证之间选择原生 Codex agent role。它首先尽量留在“接近最优质量”的区域内，再在满足质量约束的候选路线中选择成本更低、延迟更小的路线。质量是约束，成本只是次级排序因素。
 
-> **当前版本：v0.2.6。** 安装与运行采用 fail-closed 策略：CodexLattice 会校验真实 Codex CLI、安装按路线固定模型/推理强度的原生角色、记录配置哈希，并在验证状态发生漂移时拒绝运行。
+> **当前版本：v0.2.7。** 安装与运行采用 fail-closed 策略：CodexLattice 会校验真实 Codex CLI、安装按路线固定模型/推理强度的原生角色、记录配置哈希，并在验证状态发生漂移时拒绝运行。
 
 ## 快速开始
 
-前置要求：**Node.js >= 20**、**Codex CLI >= 0.149.0**。CodexLattice v0.2.6 已针对 Codex 0.149.1 做跨平台集成验证。
+前置要求：**Node.js >= 20**、**Codex CLI >= 0.149.0**。CodexLattice v0.2.7 已针对 Codex 0.149.1 做跨平台集成验证。
 
 ```bash
 npm install -g @openai/codex
