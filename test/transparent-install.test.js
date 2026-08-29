@@ -9,13 +9,31 @@ import { HOOK_MARKER, managedHookLocations, parseHooksDocument } from '../src/ho
 import { hooksDisabledCodexRunner, supportedCodexRunner } from './helpers.js';
 
 function withTempHome(fn) {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-lattice-transparent-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codex lattice transparent-'));
   try { return fn(home); }
   finally { fs.rmSync(home, { recursive: true, force: true }); }
 }
 
 function readHooks(home) {
   return parseHooksDocument(fs.readFileSync(path.join(home, 'hooks.json'), 'utf8'));
+}
+
+function runInstalledHookLauncher(receipt, payload) {
+  const launcherName = process.platform === 'win32' ? 'hook.cmd' : 'hook';
+  const launcher = receipt.runtime.files.find((entry) => entry.filename === launcherName)?.file;
+  assert.ok(launcher, `missing ${launcherName}`);
+
+  if (process.platform === 'win32') {
+    return spawnSync('cmd.exe', ['/d', '/s', '/c', `call "${launcher}" ${HOOK_MARKER}`], {
+      input: JSON.stringify(payload),
+      encoding: 'utf8',
+      windowsHide: true
+    });
+  }
+  return spawnSync(launcher, [HOOK_MARKER], {
+    input: JSON.stringify(payload),
+    encoding: 'utf8'
+  });
 }
 
 test('adaptive install creates transparent hook runtime and preserves unrelated hooks', () => withTempHome((home) => {
@@ -38,16 +56,11 @@ test('adaptive install creates transparent hook runtime and preserves unrelated 
   assert.equal(result.transparentRouting, true);
 }));
 
-test('installed self-contained hook runtime executes without resolving the npm package', () => withTempHome((home) => {
+test('installed platform hook launcher runs from a CODEX_HOME containing spaces', () => withTempHome((home) => {
   const result = install('adaptive', { home, runner: supportedCodexRunner });
-  const runnerFile = result.receipt.runtime.files.find((entry) => entry.filename === 'hook-runner.js')?.file;
-  assert.ok(runnerFile);
-
   const payload = {
     session_id: 'session-installed-runtime',
     turn_id: 'turn-installed-runtime',
-    agent_id: null,
-    agent_type: null,
     transcript_path: path.join(home, 'rollout.jsonl'),
     cwd: home,
     hook_event_name: 'UserPromptSubmit',
@@ -55,11 +68,7 @@ test('installed self-contained hook runtime executes without resolving the npm p
     permission_mode: 'default',
     prompt: 'refactor authentication across multiple modules'
   };
-  const child = spawnSync(process.execPath, [runnerFile], {
-    input: JSON.stringify(payload),
-    encoding: 'utf8',
-    windowsHide: true
-  });
+  const child = runInstalledHookLauncher(result.receipt, payload);
 
   assert.equal(child.status, 0, child.stderr);
   const output = JSON.parse(child.stdout);
