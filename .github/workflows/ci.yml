@@ -4,6 +4,7 @@ on: [push, pull_request]
 jobs:
   unit:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node: [20, 22]
@@ -19,6 +20,7 @@ jobs:
   real-codex-install:
     name: real Codex install smoke (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -31,5 +33,9 @@ jobs:
         run: npm install -g @openai/codex@0.149.1
       - name: Confirm Codex CLI
         run: codex --version
+      - name: Install CodexLattice package globally
+        run: npm install -g .
+      - name: Confirm CodexLattice global bin
+        run: codex-lattice version
       - name: Install CodexLattice into a temporary real CODEX_HOME
         run: npm run test:codex-smoke

@@ -11,9 +11,9 @@ import {
   sha256
 } from './roles.js';
 
-export const PACKAGE_VERSION = '0.2.3';
+export const PACKAGE_VERSION = '0.2.4';
 export const START = '# >>> CodexLattice managed block >>>';
-export const END = '# <<< CodexLattice managed block <<<' ;
+export const END = '# <<< CodexLattice managed block <<<';
 
 function activeBlock() {
   return managedAgentBlock(START, END);
@@ -393,6 +393,8 @@ export function assertReadyForRun({ home = codexHome(), runner = runCodex } = {}
   if (!isManagedActive(configText)) throw new Error('CodexLattice adaptive mode is not active. Run `codex-lattice install adaptive` or `codex-lattice mode adaptive`.');
   const receipt = readReceipt(home);
   if (!receipt || receipt.mode !== 'adaptive') throw new Error('CodexLattice installation receipt is missing/stale. Run `codex-lattice install adaptive` to revalidate the installation.');
+  if (receipt.packageVersion !== PACKAGE_VERSION) throw new Error(`CodexLattice was installed by version ${receipt.packageVersion || 'unknown'}, but the running CLI is ${PACKAGE_VERSION}. Run \`codex-lattice install adaptive\` to revalidate and migrate the native installation.`);
+  if (receipt.codexVersion !== base.version) throw new Error(`Codex changed from validated version ${receipt.codexVersion || 'unknown'} to ${base.version}. Run \`codex-lattice install adaptive\` to revalidate compatibility before running.`);
   if (receipt.managedBlockSha256 !== managedBlockHash(configText)) throw new Error('CodexLattice managed config has drifted since validation. Run `codex-lattice doctor --strict`, then reinstall adaptive mode.');
   const badRoles = roleIntegrity(home).filter((role) => !role.ok);
   if (badRoles.length) throw new Error(`CodexLattice route role files are missing or modified (${badRoles.length}). Run \`codex-lattice install adaptive\` to repair.`);

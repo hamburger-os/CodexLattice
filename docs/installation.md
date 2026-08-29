@@ -23,9 +23,10 @@ The baseline is versioned because Codex's multi-agent schema and tool exposure a
 7. Atomically write all route-specific role files.
 8. Atomically write the managed registration block into `config.toml`.
 9. Execute `codex features list` with the target `CODEX_HOME`. A non-zero result is a failed install.
-10. Probe the bundled model catalog when supported; inability to prove model catalog visibility is a warning rather than a structural failure.
-11. Write an installation receipt containing config/role hashes and the validated Codex version.
-12. On any failure after mutation begins, restore the snapshot and remove the failed-install backup.
+10. Require at least one enabled native multi-agent backend reported by Codex (`multi_agent` or `multi_agent_v2`). If none is enabled, fail and roll back.
+11. Probe the bundled model catalog when supported; inability to prove model catalog visibility is a warning rather than a structural failure.
+12. Write an installation receipt containing config/role hashes and the validated Codex version.
+13. On any failure after mutation begins, restore the snapshot and remove the failed-install backup.
 
 ## Why route-specific roles are the compatibility backend
 
@@ -46,7 +47,7 @@ This is intentionally more verbose on disk than four generic roles, but the runt
 - a validated adaptive receipt is present;
 - the managed block hash matches the receipt;
 - every generated route file matches the expected content hash;
-- the current Codex version still satisfies the minimum compatibility floor.
+- the current Codex version exactly matches the version recorded in the validated receipt (a Codex upgrade/downgrade requires revalidation).
 
 Use `codex-lattice doctor --strict` for the deeper native probe.
 

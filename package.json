@@ -1,6 +1,6 @@
 {
   "name": "codex-lattice",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Quality-first model and reasoning-effort orchestration for Codex GPT-5.6 Sol/Terra/Luna agents.",
   "type": "module",
   "bin": {"codex-lattice": "./bin/codex-lattice.js"},

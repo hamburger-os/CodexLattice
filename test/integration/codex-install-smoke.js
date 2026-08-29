@@ -6,7 +6,18 @@ import path from 'node:path';
 import { roleSpecs } from '../../src/roles.js';
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-lattice-real-codex-'));
-const cli = path.resolve('bin/codex-lattice.js');
+
+function installedCliPath() {
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const result = spawnSync(npmCommand, ['root', '-g'], { encoding: 'utf8', windowsHide: true });
+  if (result.status === 0) {
+    const candidate = path.join(String(result.stdout || '').trim(), 'codex-lattice', 'bin', 'codex-lattice.js');
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return path.resolve('bin/codex-lattice.js');
+}
+
+const cli = installedCliPath();
 
 function runCli(args, { expect = 0 } = {}) {
   const result = spawnSync(process.execPath, [cli, ...args], {
@@ -23,8 +34,11 @@ function runCli(args, { expect = 0 } = {}) {
 }
 
 try {
+  const baseline = 'model_reasoning_effort = "medium"\n';
+  fs.writeFileSync(path.join(home, 'config.toml'), baseline);
+
   const version = runCli(['version']).stdout.trim();
-  assert.equal(version, '0.2.3');
+  assert.equal(version, '0.2.4');
 
   const installResult = runCli(['install', 'adaptive']);
   const installed = JSON.parse(installResult.stdout);
@@ -40,15 +54,27 @@ try {
   // real Codex binary and the exact CODEX_HOME written above.
   const doctor = JSON.parse(runCli(['doctor', '--strict']).stdout);
   assert.equal(doctor.overallStatus, 'ok', JSON.stringify(doctor));
+  assert.equal(doctor.nativeProbe.checks.find((check) => check.name === 'multi_agent_backend')?.ok, true);
+  assert.equal(doctor.nativeProbe.checks.find((check) => check.name === 'bundled_model_catalog')?.ok, true);
 
   runCli(['mode', 'single']);
-  assert.doesNotMatch(fs.readFileSync(path.join(home, 'config.toml'), 'utf8'), /CodexLattice managed block/);
+  assert.equal(fs.readFileSync(path.join(home, 'config.toml'), 'utf8'), baseline);
+  const singleDoctor = JSON.parse(runCli(['doctor', '--strict']).stdout);
+  assert.equal(singleDoctor.overallStatus, 'ok', JSON.stringify(singleDoctor));
+  assert.equal(singleDoctor.adaptiveActive, false);
 
   runCli(['mode', 'adaptive']);
   assert.match(fs.readFileSync(path.join(home, 'config.toml'), 'utf8'), /CodexLattice managed block/);
+  const adaptiveDoctor = JSON.parse(runCli(['doctor', '--strict']).stdout);
+  assert.equal(adaptiveDoctor.overallStatus, 'ok', JSON.stringify(adaptiveDoctor));
 
-  runCli(['uninstall']);
-  assert.doesNotMatch(fs.readFileSync(path.join(home, 'config.toml'), 'utf8'), /CodexLattice managed block/);
+  const uninstallResult = JSON.parse(runCli(['uninstall']).stdout);
+  assert.notEqual(uninstallResult.validation?.overallStatus, 'error');
+  assert.equal(fs.readFileSync(path.join(home, 'config.toml'), 'utf8'), baseline);
+  for (const spec of roleSpecs()) {
+    assert.equal(fs.existsSync(path.join(home, 'agents', spec.filename)), false, spec.filename);
+  }
+  assert.equal(fs.existsSync(path.join(home, 'codex-lattice', 'install.json')), false);
   console.log('real Codex CLI installation smoke test passed');
 } finally {
   fs.rmSync(home, { recursive: true, force: true });

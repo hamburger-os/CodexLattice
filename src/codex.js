@@ -141,8 +141,24 @@ export function probeCodex({ home, runner = runCodex, checkConfig = true, checkM
     const configOk = features?.status === 0;
     checks.push({ name: 'native_config_parse', ok: configOk, detail: configOk ? 'codex features list accepted the active CODEX_HOME configuration' : runnerFailure(features) });
     if (!configOk) errors.push('Codex rejected the active configuration after CodexLattice installation.');
-    if (configOk && /multi[_-]?agent[^\n]*(?:false|disabled|off)/i.test(featuresText)) {
-      warnings.push('Codex reports a multi-agent feature as disabled; adaptive subagents may not be available until that feature is enabled in this Codex build/account.');
+    if (configOk) {
+      const featureStates = new Map();
+      for (const line of featuresText.split(/\r?\n/)) {
+        const match = line.trim().match(/^(\S+)\s+.+?\s+(true|false)$/i);
+        if (match) featureStates.set(match[1], match[2].toLowerCase() === 'true');
+      }
+      const multiAgentKeys = ['multi_agent', 'multi_agent_v2'].filter((key) => featureStates.has(key));
+      const multiAgentEnabled = multiAgentKeys.some((key) => featureStates.get(key) === true);
+      checks.push({
+        name: 'multi_agent_backend',
+        ok: multiAgentEnabled,
+        detail: multiAgentKeys.length
+          ? multiAgentKeys.map((key) => `${key}=${featureStates.get(key)}`).join(', ')
+          : 'no recognized multi-agent feature key reported'
+      });
+      if (!multiAgentEnabled) {
+        errors.push('Codex does not report an enabled multi-agent backend; adaptive orchestration cannot be guaranteed to work.');
+      }
     }
   }
 

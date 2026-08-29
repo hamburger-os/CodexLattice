@@ -38,3 +38,22 @@ test('Windows npm shim resolver targets the package JS launcher without a shell'
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('stable multi_agent=true is sufficient even when multi_agent_v2=false', () => {
+  const result = probeCodex({ home: '/tmp/example', runner: supportedCodexRunner });
+  assert.equal(result.overallStatus, 'ok');
+  const check = result.checks.find((item) => item.name === 'multi_agent_backend');
+  assert.equal(check?.ok, true);
+});
+
+test('probe fails closed when no multi-agent backend is enabled', () => {
+  const runner = (args) => {
+    if (args.join(' ') === 'features list') {
+      return { status: 0, stdout: 'multi_agent stable false\nmulti_agent_v2 stable false\n', stderr: '' };
+    }
+    return supportedCodexRunner(args);
+  };
+  const result = probeCodex({ home: '/tmp/example', runner });
+  assert.equal(result.overallStatus, 'error');
+  assert.match(result.errors.join(' '), /enabled multi-agent backend/);
+});

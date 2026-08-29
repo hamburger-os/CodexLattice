@@ -96,3 +96,12 @@ test('uninstall removes only CodexLattice config and roles', () => withTempHome(
   assert.equal(fs.readFileSync(config, 'utf8'), 'model = "custom-model"\n');
   for (const spec of roleSpecs()) assert.equal(fs.existsSync(path.join(home, 'agents', spec.filename)), false);
 }));
+
+test('run preflight requires revalidation after Codex version changes', () => withTempHome((home) => {
+  install('adaptive', { home, runner: supportedCodexRunner });
+  const newerRunner = (args) => {
+    if (args.join(' ') === '--version') return { status: 0, stdout: 'codex-cli 0.150.0\n', stderr: '' };
+    return supportedCodexRunner(args);
+  };
+  assert.throws(() => assertReadyForRun({ home, runner: newerRunner }), /Codex changed from validated version/);
+}));

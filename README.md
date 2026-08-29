@@ -4,7 +4,7 @@
 
 CodexLattice is a Codex-native reasoning-resource scheduler. It tries to preserve the best attainable result, then spend as little as possible *without leaving the near-optimal quality region*.
 
-> **v0.2.3 hardens installation and runtime enforcement.** Installation is now fail-closed: CodexLattice probes the real Codex CLI, writes route-specific native agent roles, asks Codex to parse the resulting configuration, writes a validated installation receipt, and rolls back automatically if validation fails. `run` refuses to start if that validated installation has drifted.
+> **v0.2.4 hardens installation and runtime enforcement.** Installation is now fail-closed: CodexLattice probes the real Codex CLI, writes route-specific native agent roles, asks Codex to parse the resulting configuration, writes a validated installation receipt, and rolls back automatically if validation fails. `run` refuses to start if that validated installation has drifted.
 
 ## Why
 
@@ -31,7 +31,7 @@ This is lexicographic optimization: quality is not traded away by a cost weight.
 
 ## Prerequisite
 
-CodexLattice v0.2.3 requires **Codex CLI >= 0.149.0** and is integration-tested against **0.149.1**.
+CodexLattice v0.2.4 requires **Codex CLI >= 0.149.0** and is integration-tested against **0.149.1**.
 
 Install/update Codex using one of the official distribution paths:
 
@@ -109,6 +109,7 @@ The doctor checks:
 - Codex executable and supported version;
 - runtime `--model` / config override capability;
 - native parsing of the active `CODEX_HOME` configuration;
+- at least one enabled Codex multi-agent backend (`multi_agent` or `multi_agent_v2`);
 - validated installation receipt;
 - managed-block integrity;
 - every installed route-role file and its SHA-256 hash;
@@ -142,7 +143,7 @@ Run through Codex:
 codex-lattice run "refactor authentication across three modules"
 ```
 
-`run` performs a lightweight preflight before invoking Codex. If adaptive mode is not active, the installation receipt is missing/stale, the managed block changed, a route file was deleted, or a role file was modified, it **refuses to run** and tells you to repair/revalidate the installation.
+`run` performs a lightweight preflight before invoking Codex. If adaptive mode is not active, the installation receipt is missing/stale, the managed block changed, a route file was deleted, a role file was modified, **or the Codex CLI version changed since validation**, it refuses to run and tells you to repair/revalidate the installation.
 
 Switch off orchestration without replacing your original model settings:
 
@@ -183,7 +184,7 @@ See [`docs/evaluation.md`](docs/evaluation.md) for the paired benchmark and cali
 
 ## CI proof boundary
 
-The repository runs unit/configuration tests on Linux, macOS, and Windows. It also has a **real Codex install smoke job** on all three platforms that installs `@openai/codex@0.149.1`, creates a temporary `CODEX_HOME`, runs the CodexLattice native installer, asks the real Codex CLI to parse the result, switches `single → adaptive`, and uninstalls.
+The repository runs unit/configuration tests on Linux, macOS, and Windows. It also has a **real Codex install smoke job** on all three platforms that installs `@openai/codex@0.149.1`, globally installs the CodexLattice npm package, verifies the global `codex-lattice` command, creates a temporary `CODEX_HOME`, runs `install adaptive`, requires `doctor --strict` to pass, verifies an enabled multi-agent backend and all three GPT-5.6 route slugs, switches `single → adaptive` with strict validation, and uninstalls while proving the baseline config is restored.
 
 That smoke test deliberately does not claim model-account entitlement or perform paid/authenticated model calls. Actual Luna/Terra/Sol availability still depends on the user's Codex account. The installer reports that boundary instead of pretending configuration alone proves entitlement.
 
@@ -197,7 +198,7 @@ CodexLattice owns only role names prefixed with `lattice_` inside its managed bl
 - An explicit `[agents] enabled = false` (or explicit multi-agent disable) is respected: adaptive installation stops instead of silently overriding the user's choice.
 - `single` mode is passthrough: it removes only the CodexLattice managed block and route files.
 
-## What v0.2.3 intentionally does not claim
+## What v0.2.4 intentionally does not claim
 
 - Heuristic quality values are not calibrated probabilities yet.
 - Multiple cheaper agents are not assumed to equal one stronger model.
