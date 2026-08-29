@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 const BUCKETS = ['easy', 'medium', 'hard', 'critical'];
 const EFFICIENCY_METRICS = ['inputTokens', 'outputTokens', 'reasoningTokens', 'costUsd'];
+const ENVIRONMENT_FIELDS = ['node', 'codex', 'codexLattice', 'platform', 'arch'];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -132,23 +133,63 @@ function pairKey(row) {
   return `${row.taskId}\0${row.trial}`;
 }
 
+function resultKey(row) {
+  return `${row.taskId}\0${row.runnerId}\0${row.trial}`;
+}
+
+function environmentSignature(row) {
+  return JSON.stringify(ENVIRONMENT_FIELDS.map((field) => row.environment?.[field] ?? null));
+}
+
+function sameTrialSet(left, right) {
+  if (left.size !== right.size) return false;
+  for (const value of left) if (!right.has(value)) return false;
+  return true;
+}
+
 export function promotionDecision(results, study, corpus, runnerConfig) {
   validateStudy(study, corpus, runnerConfig);
   const { candidate, baseline, minTrialsPerTask, requireHumanScores, maxPassRateDrop, maxMeanScoreDrop, requireCriticalNoRegression, efficiency } = study.promotion;
   const holdoutIds = new Set(study.splits.holdout);
+  const taskById = new Map((corpus?.tasks || []).map((task) => [task.id, task]));
   const relevant = results.filter((row) => holdoutIds.has(row.taskId) && [candidate, baseline].includes(row.runnerId));
   const reasons = [];
 
   const corpusVersions = new Set(relevant.map((row) => row.corpusVersion).filter(Boolean));
   const runnerVersions = new Set(relevant.map((row) => row.runnerConfigVersion).filter(Boolean));
   if (corpusVersions.size !== 1) reasons.push('holdout results must use exactly one corpus version');
+  else if (!corpusVersions.has(corpus.version)) reasons.push(`holdout corpus version must match current corpus version ${corpus.version}`);
   if (runnerVersions.size !== 1) reasons.push('holdout results must use exactly one runner-config version');
+  else if (!runnerVersions.has(runnerConfig.version)) reasons.push(`holdout runner-config version must match current runner config ${runnerConfig.version}`);
+
+  const seenResultKeys = new Set();
+  const seenRunIds = new Set();
+  for (const row of relevant) {
+    const key = resultKey(row);
+    if (seenResultKeys.has(key)) reasons.push(`duplicate holdout result: ${row.taskId} × ${row.runnerId} trial ${row.trial}`);
+    seenResultKeys.add(key);
+    if (seenRunIds.has(row.runId)) reasons.push(`duplicate holdout runId: ${row.runId}`);
+    seenRunIds.add(row.runId);
+    if (row.bucket !== taskById.get(row.taskId)?.bucket) reasons.push(`holdout result bucket does not match corpus task: ${row.taskId}`);
+  }
 
   for (const taskId of holdoutIds) {
-    for (const runnerId of [candidate, baseline]) {
-      const rows = relevant.filter((row) => row.taskId === taskId && row.runnerId === runnerId);
-      const distinctTrials = new Set(rows.map((row) => row.trial));
-      if (distinctTrials.size < minTrialsPerTask) reasons.push(`${taskId} × ${runnerId} needs at least ${minTrialsPerTask} distinct trials`);
+    const candidateTaskRows = relevant.filter((row) => row.taskId === taskId && row.runnerId === candidate);
+    const baselineTaskRows = relevant.filter((row) => row.taskId === taskId && row.runnerId === baseline);
+    const candidateTrials = new Set(candidateTaskRows.map((row) => row.trial));
+    const baselineTrials = new Set(baselineTaskRows.map((row) => row.trial));
+    if (candidateTrials.size < minTrialsPerTask) reasons.push(`${taskId} × ${candidate} needs at least ${minTrialsPerTask} distinct trials`);
+    if (baselineTrials.size < minTrialsPerTask) reasons.push(`${taskId} × ${baseline} needs at least ${minTrialsPerTask} distinct trials`);
+    if (!sameTrialSet(candidateTrials, baselineTrials)) reasons.push(`${taskId} candidate/baseline trials are not paired`);
+
+    const candidateByTrial = new Map(candidateTaskRows.map((row) => [row.trial, row]));
+    const baselineByTrial = new Map(baselineTaskRows.map((row) => [row.trial, row]));
+    for (const trial of candidateTrials) {
+      const candidateRow = candidateByTrial.get(trial);
+      const baselineRow = baselineByTrial.get(trial);
+      if (baselineRow && environmentSignature(candidateRow) !== environmentSignature(baselineRow)) {
+        reasons.push(`${taskId} trial ${trial} candidate/baseline environment mismatch`);
+      }
     }
   }
 
