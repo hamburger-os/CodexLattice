@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
 import { buildPlan, shadowComparison } from '../src/policy.js';
 import { buildCodexExecArgs } from '../src/runtime.js';
-import { install, setMode, uninstall, codexHome } from '../src/installer.js';
+import {
+  PACKAGE_VERSION,
+  assertReadyForRun,
+  doctor,
+  install,
+  setMode,
+  uninstall
+} from '../src/installer.js';
 import {
   appendTelemetry,
   setTelemetry,
@@ -17,19 +22,7 @@ import {
 const [cmd, ...args] = process.argv.slice(2);
 
 function help() {
-  console.log(`CodexLattice
-
-Commands:
-  install [adaptive|single]
-  mode <adaptive|single>
-  explain [--trace] <task>
-  shadow <task>
-  run <task>
-  telemetry <on|off|status|summarize> [jsonl-path]
-  feedback <run-id> <pass|fail|mixed> [note]
-  doctor
-  uninstall
-`);
+  console.log(`CodexLattice ${PACKAGE_VERSION}\n\nCommands:\n  install [adaptive|single]\n  mode <adaptive|single>\n  explain [--trace] <task>\n  shadow <task>\n  run <task>\n  telemetry <on|off|status|summarize> [jsonl-path]\n  feedback <run-id> <pass|fail|mixed> [note]\n  doctor [--strict]\n  uninstall\n  version\n`);
 }
 
 function compactRoute(route) {
@@ -39,6 +32,11 @@ function compactRoute(route) {
 try {
   if (!cmd || ['-h', '--help', 'help'].includes(cmd)) {
     help();
+    process.exit(0);
+  }
+
+  if (cmd === 'version' || cmd === '--version' || cmd === '-v') {
+    console.log(PACKAGE_VERSION);
     process.exit(0);
   }
 
@@ -94,20 +92,16 @@ try {
   }
 
   if (cmd === 'doctor') {
-    const home = codexHome();
-    const config = path.join(home, 'config.toml');
-    console.log(JSON.stringify({
-      codexHome: home,
-      configExists: fs.existsSync(config),
-      codexOnPath: spawnSync('codex', ['--version'], { encoding: 'utf8' }).status === 0,
-      telemetry: telemetryStatus()
-    }, null, 2));
-    process.exit(0);
+    const report = doctor();
+    console.log(JSON.stringify(report, null, 2));
+    if (args.includes('--strict') && report.overallStatus !== 'ok') process.exit(1);
+    process.exit(report.overallStatus === 'error' ? 1 : 0);
   }
 
   if (cmd === 'run') {
     const task = args.join(' ');
     if (!task) throw new Error('run requires a task');
+    assertReadyForRun();
     const plan = buildPlan(task);
     const runId = crypto.randomUUID();
     const startedAt = Date.now();
@@ -118,7 +112,7 @@ try {
       executeRoute: compactRoute(plan.stages.execute),
       verifyRoute: compactRoute(plan.stages.verify)
     });
-    const result = spawnSync('codex', buildCodexExecArgs(task, plan), { stdio: 'inherit' });
+    const result = spawnSync(process.env.CODEX_LATTICE_CODEX || 'codex', buildCodexExecArgs(task, plan), { stdio: 'inherit' });
     appendTelemetry('run_finished', {
       runId,
       exitCode: result.status ?? 1,

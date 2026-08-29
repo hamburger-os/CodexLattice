@@ -1,72 +1,51 @@
 # Architecture
 
-CodexLattice is a thin policy layer over Codex native subagents. It does not replace Codex, proxy model traffic, or change sandbox/approval policy.
-
 ## State machine
 
-`ANALYZE -> PLAN? -> EXPLORE? -> EXECUTE -> VERIFY -> {DONE | REPLAN | ESCALATE}`
+`ANALYZE -> PLAN? -> EXPLORE? -> EXECUTE -> VERIFY -> { DONE | REPLAN | ESCALATE }`
 
-The root agent can skip stages when the task is simple. Parallelism is allowed only for independent workstreams.
+The root coordinator may skip PLAN/EXPLORE/VERIFY when the task does not justify them.
 
-## Quality-first route selection
+## Quality-first selection
 
-For each stage, the policy builds a bounded candidate set of `(model, reasoning effort)` routes.
+For each stage, CodexLattice predicts task-conditioned quality for supported model/effort routes. It finds the best predicted quality `Q*`, retains only routes inside `Q* - delta`, then minimizes nominal cost and latency inside that feasible set. High-risk work uses `delta = 0`.
 
-1. Apply stage/risk hard constraints.
-2. Estimate task-conditioned quality for each candidate.
-3. Compute the predicted ceiling `Q*`.
-4. Keep only candidates within `delta` of `Q*`.
-5. Choose the lowest nominal-cost candidate, then lowest latency, inside that near-optimal set.
-6. Set `delta = 0` for high-risk work.
+## Native execution backend
 
-This is intentionally lexicographic. A cheap route cannot compensate for a material predicted quality loss.
+The root execution route is enforced through Codex CLI runtime overrides (`--model` plus `model_reasoning_effort`).
 
-## Model/effort envelope
+Subagent routing uses route-specific native Codex agent roles instead of relying on dynamic spawn-model overrides. The installer registers a finite role lattice such as:
 
-- Exploration: Luna low/medium, Terra medium.
-- Execution: Luna medium through Sol high.
-- Planning/verification: Terra high through Sol xhigh.
-- `max` reasoning is exposed only for tasks classified as critical and only in planning/verification.
+- `lattice_plan_terra_medium`
+- `lattice_plan_sol_high`
+- `lattice_explore_luna_low`
+- `lattice_execute_terra_medium`
+- `lattice_verify_sol_max`
 
-`max` being available does not mean it is automatically chosen. If the seed quality model predicts no gain over `xhigh`, the cheaper route wins. This is deliberate until eval data proves otherwise.
+Each role config pins exactly one model and reasoning effort and carries stage-specific developer instructions. The orchestrator sends the selected agent type to Codex. This design remains deterministic even when a Codex multi-agent tool variant does not expose model/reasoning fields on `spawn_agent`.
 
-## Cost signal
+## Installation integrity
 
-The seed policy derives a nominal ranking index from a pinned public GPT-5.6 input/output price snapshot plus an explicit effort multiplier. The index is only used to order routes after the quality floor is satisfied. It is not an estimate of an actual invoice because real token/reasoning usage is task-dependent.
+Installation is transactional and fail-closed:
 
-## Explainability
+`PROBE CODEX -> SNAPSHOT -> WRITE ROLES -> WRITE CONFIG -> NATIVE PARSE -> RECEIPT`
 
-`codex-lattice explain --trace` returns every stage candidate with:
+Any post-write structural validation failure triggers rollback. Runtime preflight checks the receipt and hashes before starting a task.
 
-- predicted quality,
-- quality gap from `Q*`,
-- near-optimal eligibility,
-- rejection reason,
-- nominal cost and latency rank,
-- final selection reason.
+## Parallelism
 
-This makes routing debuggable and gives calibration work a stable trace format.
+Parallelism is a routing/prompt constraint, not a blanket global concurrency rewrite:
 
-## Telemetry and calibration
+- exploration <= 3 only for independent questions;
+- implementation <= 2 only for independent write workstreams;
+- serial dependencies remain serial.
 
-Telemetry is disabled by default. When enabled it writes local JSONL under `CODEX_HOME` and never writes raw task text. A task is represented by a short SHA-256 fingerprint and length.
+This avoids assuming that one global `[agents]` concurrency field has identical semantics across current and future Codex multi-agent backends.
 
-Recorded execution signals include selected routes, task features, exit code, and elapsed time. Optional user feedback (`pass`, `mixed`, `fail`) is stored as a separate event because process exit status is not a reliable quality label.
+## Verification
 
-Long term, the transparent seed model should be replaced by calibrated estimates of:
+Deterministic tests, type checks, static analysis, reproducible commands, and direct evidence are preferred over model voting. Sol/high/xhigh/max review is reserved for cases where risk or evidence justifies it.
 
-`P(success | task, model, effort, stage, context)`
+## Calibration path
 
-alongside expected spend, latency and regression risk.
-
-## Configuration safety
-
-The installer owns only the text between its managed markers and its four agent TOML files. `single` mode removes the managed block rather than forcing a model. If an unmanaged `[agents]` or `[agents.*]` table exists, adaptive installation refuses to proceed instead of risking duplicate TOML tables.
-
-## Route enforcement
-
-The policy output is not merely advisory. `codex-lattice run` launches the root `codex exec` process with the selected EXECUTE route using the Codex CLI model override plus a runtime `model_reasoning_effort` configuration override.
-
-Custom role files intentionally omit `model` and `model_reasoning_effort`. This matters because Codex custom-agent file values take precedence over spawn-time routing. Keeping role files model-agnostic allows the coordinator to explicitly request each PLAN / EXPLORE / EXECUTE / VERIFY stage's selected model and effort when spawning that role.
-
-The global Terra-medium subagent settings installed by CodexLattice remain a fallback only; the orchestration prompt instructs the coordinator to supply explicit per-stage values for every `lattice_*` spawn.
+The seed router is transparent rather than learned. v0.3 is intended to calibrate `P(success | task, model, effort, stage, context)` using paired evaluations while preserving the lexicographic quality-floor objective.
