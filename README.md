@@ -4,7 +4,7 @@
 
 CodexLattice is a Codex-native reasoning-resource scheduler. It tries to preserve the best attainable result, then spend as little as possible *without leaving the near-optimal quality region*.
 
-> v0.2 adds explainable route traces, critical-task `max` reasoning eligibility, opt-in local telemetry, feedback labels, and shadow routing for calibration. The router is still a transparent seed policy, not a statistically calibrated predictor yet.
+> v0.2.1 adds explainable route traces, critical-task `max` reasoning eligibility, opt-in local telemetry, feedback labels, shadow routing, and end-to-end enforcement of the selected root/subagent model and reasoning effort. The router is still a transparent seed policy, not a statistically calibrated predictor yet.
 
 ## Why
 
@@ -100,12 +100,14 @@ See [`docs/evaluation.md`](docs/evaluation.md) for the paired benchmark and cali
 
 ## Roles
 
-| Role | Default model | Effort | Purpose |
-|---|---|---|---|
-| planner | GPT-5.6 Sol | high | architecture, ambiguity, decomposition, stop conditions |
-| explorer | GPT-5.6 Luna | low | bounded repository search/evidence |
-| implementer | GPT-5.6 Terra | medium | normal coding work |
-| reviewer | GPT-5.6 Sol | high | independent high-rigor verification |
+| Role | Purpose |
+|---|---|
+| planner | architecture, ambiguity, decomposition, stop conditions |
+| explorer | bounded repository search/evidence |
+| implementer | bounded implementation and validation |
+| reviewer | independent high-rigor verification |
+
+Role files intentionally **do not pin a model or reasoning effort**. CodexLattice supplies the selected stage route when spawning a role, so the same planner/reviewer/worker instructions can run on different GPT-5.6 tiers when the quality policy calls for it. The root `codex exec` process is also launched with the selected EXECUTE model/effort.
 
 The root policy is **not** required to use every role. Simple tasks should remain simple, and parallelism is bounded.
 

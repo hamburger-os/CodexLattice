@@ -62,3 +62,11 @@ alongside expected spend, latency and regression risk.
 ## Configuration safety
 
 The installer owns only the text between its managed markers and its four agent TOML files. `single` mode removes the managed block rather than forcing a model. If an unmanaged `[agents]` or `[agents.*]` table exists, adaptive installation refuses to proceed instead of risking duplicate TOML tables.
+
+## Route enforcement
+
+The policy output is not merely advisory. `codex-lattice run` launches the root `codex exec` process with the selected EXECUTE route using the Codex CLI model override plus a runtime `model_reasoning_effort` configuration override.
+
+Custom role files intentionally omit `model` and `model_reasoning_effort`. This matters because Codex custom-agent file values take precedence over spawn-time routing. Keeping role files model-agnostic allows the coordinator to explicitly request each PLAN / EXPLORE / EXECUTE / VERIFY stage's selected model and effort when spawning that role.
+
+The global Terra-medium subagent settings installed by CodexLattice remain a fallback only; the orchestration prompt instructs the coordinator to supply explicit per-stage values for every `lattice_*` spawn.
