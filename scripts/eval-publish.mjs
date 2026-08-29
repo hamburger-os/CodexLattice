@@ -31,6 +31,8 @@ const records = sanitizeEvidence(results, study);
 const corpusVersions = [...new Set(records.map((row) => row.corpusVersion))];
 const runnerConfigVersions = [...new Set(records.map((row) => row.runnerConfigVersion))];
 if (corpusVersions.length !== 1 || runnerConfigVersions.length !== 1) throw new Error('public evidence set must not mix corpus or runner-config versions');
+if (corpusVersions[0] !== corpus.version) throw new Error(`public evidence corpus version must match current corpus version ${corpus.version}`);
+if (runnerConfigVersions[0] !== runners.version) throw new Error(`public evidence runner-config version must match current runner-config version ${runners.version}`);
 const evidence = {
   schemaVersion: 'evidence-set-1',
   studyVersion: study.version,
