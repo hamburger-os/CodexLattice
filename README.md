@@ -144,6 +144,12 @@ codex-lattice mode adaptive
 codex-lattice uninstall
 ```
 
+## Codex App compatibility
+
+CodexLattice treats CLI support, shared Codex configuration compatibility, and native desktop UI orchestration as different claims. The managed roles/configuration are designed to coexist with Codex surfaces that consume the same Codex configuration, so **Codex App shared-config compatibility is an explicit target**.
+
+However, a successful CLI smoke test does not prove that an arbitrary task launched from the Codex App UI automatically invokes `codex-lattice run`. Native App UI orchestration is not currently claimed. See [`docs/codex-app.md`](docs/codex-app.md) for the exact support levels and desktop acceptance checklist.
+
 ## Local telemetry (opt-in)
 
 Telemetry is disabled by default and stays local. Raw task text is never written by CodexLattice telemetry.
@@ -161,9 +167,11 @@ See [`docs/evaluation.md`](docs/evaluation.md) for the paired-evaluation and cal
 
 ## Evidence and proof boundary
 
-The repository currently proves installation and configuration behavior more strongly than outcome quality.
+The repository proves installation/configuration behavior more strongly than outcome quality, and now also enforces the study methodology needed to collect outcome evidence without silently promoting incomplete results.
 
-CI runs unit/configuration tests on Linux, macOS, and Windows. A real-Codex smoke matrix installs `@openai/codex@0.149.1`, globally installs CodexLattice, validates a temporary `CODEX_HOME`, requires `doctor --strict`, verifies an enabled multi-agent backend and the expected GPT-5.6 route slugs, exercises `single → adaptive`, and confirms uninstall restores the baseline configuration.
+Blocking CI runs unit/configuration tests on Linux, macOS, and Windows. A real-Codex smoke matrix installs `@openai/codex@0.149.1`, globally installs CodexLattice, validates a temporary `CODEX_HOME`, requires `doctor --strict`, verifies an enabled multi-agent backend and the expected GPT-5.6 route slugs, exercises `single → adaptive`, and confirms uninstall restores the baseline configuration. A separate weekly/manual canary runs the same structural smoke against `@openai/codex@latest`; it is an early-warning signal, not a release guarantee.
+
+The source repository also contains a frozen paired-study contract with a calibration/holdout split, reproducible seeded runner ordering, blind-grading tools, Wilson pass-rate intervals, sanitized evidence export, and a holdout-only fail-closed promotion gate. The current gate requires complete human-score coverage and trustworthy measured reasoning-token coverage; missing usage is never replaced with heuristic cost indices. These research commands are intended for a source checkout and are not required by the installed runtime package.
 
 It deliberately **does not** claim:
 
@@ -171,15 +179,18 @@ It deliberately **does not** claim:
 - that multiple cheaper agents equal one stronger model;
 - a fixed percentage cost saving or speedup;
 - that local model-catalog visibility proves account entitlement;
-- that CI performs authenticated or paid model calls.
+- that CI performs authenticated or paid model calls;
+- that the Codex App native UI is proven to route arbitrary tasks through CodexLattice.
 
-The next major engineering milestone is reproducible paired evaluation and calibration. See [`docs/roadmap.md`](docs/roadmap.md) and [Issue #1](https://github.com/hamburger-os/CodexLattice/issues/1).
+The remaining evidence milestone is to run authenticated repeated trials against the frozen study, independently grade the blind artifacts, collect trustworthy measured efficiency data, pass the holdout promotion gate, and publish the sanitized versioned evidence before any routing calibration claim. See [`docs/evaluation.md`](docs/evaluation.md), [`docs/roadmap.md`](docs/roadmap.md), and [Issue #1](https://github.com/hamburger-os/CodexLattice/issues/1).
 
 ## Documentation
 
 - [Installation](docs/installation.md)
 - [Architecture](docs/architecture.md)
-- [Evaluation protocol](docs/evaluation.md)
+- [Codex compatibility](docs/compatibility.md)
+- [Codex App compatibility](docs/codex-app.md)
+- [Evaluation and calibration protocol](docs/evaluation.md)
 - [Research notes](docs/research-notes.md)
 - [Roadmap](docs/roadmap.md)
 - [Contributing](CONTRIBUTING.md)
@@ -190,7 +201,7 @@ The next major engineering milestone is reproducible paired evaluation and calib
 
 Bug reports, compatibility findings, policy ideas, benchmark tasks, and focused pull requests are welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting changes.
 
-For compatibility reports, include the operating system, Node version, Codex version, CodexLattice version, and sanitized `doctor --strict` output. Never post tokens, credentials, or private task content.
+For compatibility reports, include the operating system, Node version, Codex version, CodexLattice version, and sanitized `doctor --strict` output. For Codex App findings, also include the App version and whether the problem concerns shared configuration or an App-specific UI/runtime flow. Never post tokens, credentials, or private task content.
 
 ## License
 
