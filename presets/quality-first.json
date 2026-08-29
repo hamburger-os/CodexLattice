@@ -1,0 +1,9 @@
+{
+  "name": "quality-first",
+  "quality_tolerance_delta": 0.02,
+  "critical_risk_delta": 0,
+  "max_parallel_agents": 3,
+  "max_implementers": 2,
+  "max_verify_cycles": 2,
+  "principle": "maximize predicted quality first; minimize expected cost and latency only among routes statistically near the quality ceiling"
+}
