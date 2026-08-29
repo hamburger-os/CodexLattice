@@ -1,14 +1,14 @@
 {
   "name": "codex-lattice",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "description": "Quality-first model and reasoning-effort orchestration for Codex GPT-5.6 Sol/Terra/Luna agents.",
   "type": "module",
   "bin": {
     "codex-lattice": "bin/codex-lattice.js"
   },
   "scripts": {
-    "test": "node --test test/agents.test.js test/codex.test.js test/evaluation.test.js test/evidence.test.js test/installer.test.js test/policy.test.js test/release-request.test.js test/runtime.test.js test/telemetry.test.js",
-    "check": "node --check bin/codex-lattice.js && node --check src/policy.js && node --check src/installer.js && node --check src/telemetry.js && node --check src/runtime.js && node --check src/roles.js && node --check src/codex.js && node --check scripts/verify-package.mjs && node --check scripts/release-request.mjs && node --check scripts/eval-lib.mjs && node --check scripts/evidence-lib.mjs && node --check scripts/eval-validate.mjs && node --check scripts/eval-run.mjs && node --check scripts/eval-summarize.mjs && node --check scripts/eval-blind.mjs && node --check scripts/eval-apply-grades.mjs && node --check scripts/eval-promote.mjs && node --check scripts/eval-publish.mjs",
+    "test": "node --test test/agents.test.js test/codex.test.js test/evaluation.test.js test/evidence.test.js test/hook.test.js test/hooks.test.js test/installer.test.js test/policy.test.js test/release-request.test.js test/runtime.test.js test/telemetry.test.js test/transparent-install.test.js",
+    "check": "node --check bin/codex-lattice.js && node --check src/policy.js && node --check src/installer.js && node --check src/installation.js && node --check src/hooks.js && node --check src/hook.js && node --check src/coordinator.js && node --check src/telemetry.js && node --check src/runtime.js && node --check src/roles.js && node --check src/codex.js && node --check scripts/verify-package.mjs && node --check scripts/release-request.mjs && node --check scripts/eval-lib.mjs && node --check scripts/evidence-lib.mjs && node --check scripts/eval-validate.mjs && node --check scripts/eval-run.mjs && node --check scripts/eval-summarize.mjs && node --check scripts/eval-blind.mjs && node --check scripts/eval-apply-grades.mjs && node --check scripts/eval-promote.mjs && node --check scripts/eval-publish.mjs",
     "test:codex-smoke": "node test/integration/codex-install-smoke.js",
     "verify:package": "node scripts/verify-package.mjs",
     "eval:validate": "node scripts/eval-validate.mjs",
