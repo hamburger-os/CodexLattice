@@ -17,88 +17,90 @@
 
 **Quality-first reasoning-resource orchestration for Codex using GPT-5.6 Sol, Terra, and Luna.**
 
-CodexLattice routes planning, exploration, execution, and verification through native Codex agent roles. It tries to stay inside a near-optimal quality envelope first, then uses the least expensive eligible route. Quality is the constraint; cost is the tie-breaker.
+CodexLattice chooses native Codex roles for planning, exploration, execution, and verification. It first preserves a near-optimal predicted quality set, then prefers the least expensive and lowest-latency eligible route.
 
-> **Current release: v0.2.7.** Installation and runtime enforcement are fail-closed: CodexLattice validates the real Codex CLI, installs route-specific native roles, records hashes in a receipt, and refuses to run when the validated state drifts.
+> **v0.3.0:** adaptive mode is transparent. After installation, ordinary root turns in Codex are routed by a `UserPromptSubmit` hook. `codex-lattice run` remains available for explicit CI/debug execution, but it is no longer the normal chat entry point.
 
 ## Quick start
 
-Prerequisites: **Node.js >= 20** and **Codex CLI >= 0.149.0**. CodexLattice v0.2.7 is integration-tested against Codex 0.149.1.
+Prerequisites: **Node.js >= 20** and **Codex CLI >= 0.149.0**. The release matrix tests Codex 0.149.1.
 
 ```bash
 npm install -g @openai/codex
 npm install -g https://github.com/hamburger-os/CodexLattice.git
 
-codex-lattice install adaptive
+codex-lattice install
 codex-lattice doctor --strict
-codex-lattice run "refactor authentication across three modules"
+
+# Then use Codex normally.
+codex
 ```
 
-CodexLattice does not silently install, replace, or reconfigure Codex sandbox/approval settings.
-
-## What it changes
-
-Instead of relying on prompt-time `model` or `reasoning_effort` overrides, CodexLattice installs native route roles such as:
+From then on, just type ordinary prompts such as:
 
 ```text
-lattice_plan_sol_high
-lattice_explore_luna_low
-lattice_execute_terra_medium
-lattice_verify_sol_max
+refactor authentication across three modules
 ```
 
-Each role pins its own model and reasoning effort in a Codex role configuration. The runtime selects the exact agent type for each lifecycle stage.
+No `codex-lattice run`, slash command, model picker, or per-project routing setup is required. Codex may ask for a **one-time review of the installed user hook** before it runs; CodexLattice deliberately leaves that decision to Codex.
+
+## Transparent architecture
+
+Adaptive installation adds three owned components under the user's `CODEX_HOME`:
+
+- route-specific native roles such as `lattice_execute_terra_medium` and `lattice_verify_sol_max`;
+- one marker-owned `UserPromptSubmit` handler merged into `hooks.json` without replacing unrelated hooks;
+- a versioned self-contained hook runtime under `CODEX_HOME/codex-lattice/runtime/<version>/`.
 
 ```text
-                    USER TASK
-                       │
-                       ▼
-                ┌─────────────┐
-                │ Task signals │
-                └──────┬──────┘
-                       │
-                       ▼
-                ┌──────────────┐
-                │ Route policy │
-                └──────┬───────┘
-                       │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-      Luna           Terra            Sol
-   lightweight      balanced          deep
-        │              │              │
-        └──────────────┼──────────────┘
-                       ▼
-        PLAN → EXPLORE → EXECUTE → VERIFY
-                       │
-                       ▼
-              Native Codex agents
+ordinary user prompt
+        │
+        ▼
+UserPromptSubmit hook
+        │
+        ▼
+   buildPlan(task)
+        │
+        ▼
+derived route metadata
+        │
+        ▼
+  root coordinator
+        │
+        ├── PLAN
+        ├── EXPLORE
+        ├── EXECUTE
+        └── VERIFY
+             │
+             ▼
+      native Codex roles
+      Luna / Terra / Sol
 ```
 
-## Why
+The JavaScript policy remains the routing authority. The hook injects only **derived route metadata and coordinator rules**; it does not copy the raw user prompt into developer context. For repository/tool work, the root is instructed to coordinate the exact selected route-specific agents rather than substituting its own model-selection guess.
 
-Static recipes such as “Sol plans, Terra codes, Sol reviews” can waste stronger-model calls on easy work while still under-spending on risky work. CodexLattice uses a stage-aware policy:
+Subagent `UserPromptSubmit` turns are ignored by the hook, preventing recursive Lattice routing. Hook failures also fail open so a routing-extension failure does not make ordinary Codex unusable.
 
-- **Plan:** Terra for ordinary work; Sol when ambiguity, architecture, or risk demands it.
-- **Explore:** Luna by default, with bounded parallelism for independent repository questions.
-- **Execute:** Luna/Terra when predicted quality remains near the ceiling; escalate on evidence.
-- **Verify:** deterministic checks first; stronger review for high-risk, disagreement, or incomplete validation.
-- **Critical ceiling:** maximum reasoning is reserved for critical planning/verification paths.
-- **Fallback:** `single` mode removes CodexLattice-managed orchestration and returns control to the user's original Codex configuration.
+## Routing objective
 
-## Objective
+For each stage and candidate route `r`:
 
-For candidate routes `r`:
+1. estimate task-conditioned quality `Q(r | task, stage)`;
+2. find the predicted ceiling `Q*`;
+3. keep routes with `Q(r) >= Q* - δ`;
+4. minimize nominal cost, then latency, inside that set;
+5. set `δ = 0` for high-risk work.
 
-1. Estimate task-conditioned quality `Q(r | task, stage)`.
-2. Find the predicted quality ceiling `Q*`.
-3. Keep routes with `Q(r) >= Q* - δ`.
-4. Among those routes, minimize nominal cost, then latency.
-5. For high-risk work, set `δ = 0`.
+The current quality values are transparent seed heuristics, not calibrated probabilities. The `cost` field is a ranking index, not a billing estimate.
 
-This is lexicographic optimization: quality is not traded away through a cost weight. The current quality model is intentionally simple and inspectable. `cost` is a ranking index, **not** a billing estimator.
+Typical behavior:
 
-## Inspect before you run
+- **Plan:** Terra for ordinary work; Sol for ambiguity, architecture, or higher risk.
+- **Explore:** Luna by default, with bounded parallelism only for independent repository questions.
+- **Execute:** Luna/Terra when quality remains near the predicted ceiling; stronger routes on evidence.
+- **Verify:** deterministic checks first; stronger independent review for higher-risk or incompletely validated changes.
+
+## Inspect routing
 
 ```bash
 codex-lattice explain "refactor authentication across three modules"
@@ -106,83 +108,68 @@ codex-lattice explain --trace "refactor authentication across three modules"
 codex-lattice shadow "refactor authentication across three modules"
 ```
 
-`explain` shows the selected lifecycle routes. `--trace` includes the candidate set and rejection reasons. `shadow` gives a counterfactual view against a Sol-medium single-agent reference without claiming measured savings.
-
-## Installation integrity
-
-`codex-lattice install adaptive` performs a transaction rather than a cosmetic config edit. It:
-
-1. verifies a supported `codex` binary;
-2. verifies the runtime model/config override surface;
-3. backs up the existing Codex config;
-4. preserves unrelated user-defined agent roles;
-5. writes route-specific native role files;
-6. registers them in a clearly delimited managed block;
-7. asks the installed Codex CLI to parse the active configuration;
-8. verifies that an effective multi-agent backend is enabled;
-9. records config and role hashes in an installation receipt;
-10. rolls back automatically when native validation fails.
-
-Validate at any time:
+For explicit CI/debug execution, the compatibility path still exists:
 
 ```bash
-codex-lattice doctor --strict
+codex-lattice run "refactor authentication across three modules"
 ```
 
-`run` refuses to start when the validated installation is missing, stale, modified, or was validated against a different Codex CLI version.
+The child process is marked so the transparent hook does not route the same task a second time.
+
+## Transactional installation
+
+`codex-lattice install` validates Codex, preserves unrelated config/roles/hooks, installs route roles and the versioned hook runtime, merges the managed hook, asks Codex to parse the resulting configuration, checks multi-agent/hook/model signals, and writes an integrity receipt.
+
+If validation fails, managed changes are rolled back. `doctor --strict` verifies the managed config block, role hashes, hook handler, runtime hashes, Codex version, multi-agent backend, hook feature, and local model catalog.
+
+CodexLattice never writes Codex's hook trust state on the user's behalf.
 
 ## Modes and uninstall
 
 ```bash
-# Remove CodexLattice orchestration while preserving the user's baseline config
+# Disable transparent routing and restore the user's baseline behavior.
 codex-lattice mode single
 
-# Re-enable and revalidate adaptive orchestration
+# Re-enable transparent adaptive routing.
 codex-lattice mode adaptive
 
-# Remove only CodexLattice-managed config, roles, and receipt
+# Remove CodexLattice-owned config, hook, roles, runtime, and receipt.
 codex-lattice uninstall
 ```
 
-## Codex App compatibility
+Unrelated `hooks.json` handlers are preserved. Runtime files are removed only when the receipt hash still proves ownership; modified files are left in place instead of being guessed away.
 
-CodexLattice treats CLI support, shared Codex configuration compatibility, and native desktop UI orchestration as different claims. The managed roles/configuration are designed to coexist with Codex surfaces that consume the same Codex configuration, so **Codex App shared-config compatibility is an explicit target**.
+## Codex App
 
-However, a successful CLI smoke test does not prove that an arbitrary task launched from the Codex App UI automatically invokes `codex-lattice run`. Native App UI orchestration is not currently claimed. See [`docs/codex-app.md`](docs/codex-app.md) for the exact support levels and desktop acceptance checklist.
+v0.3 is designed for the shared user hook/config layer used by Codex CLI and Codex App, so the intended desktop flow is also simply **open the app and chat normally**.
+
+Current upstream boundaries are documented rather than hidden:
+
+- the user-level hook may need one-time Codex review;
+- Desktop can emit internal non-resumable turns, so CodexLattice skips turns whose `transcript_path` is explicitly `null` by default (`CODEX_LATTICE_ROUTE_EPHEMERAL=1` opts in);
+- image attachment contents are not currently present in the `UserPromptSubmit` classifier payload, so multimodal routing uses the text portion;
+- automated CI validates the real Codex CLI and shared configuration, while full desktop UI acceptance remains a separate check.
+
+See [`docs/codex-app.md`](docs/codex-app.md).
 
 ## Local telemetry (opt-in)
 
-Telemetry is disabled by default and stays local. Raw task text is never written by CodexLattice telemetry.
+Telemetry is disabled by default, stays local, and never writes raw task text.
 
 ```bash
 codex-lattice telemetry on
 codex-lattice telemetry status
 codex-lattice telemetry summarize
-
 codex-lattice feedback <run-id> pass
-codex-lattice feedback <run-id> mixed "tests pass but implementation is too invasive"
 ```
 
 See [`docs/evaluation.md`](docs/evaluation.md) for the paired-evaluation and calibration protocol.
 
-## Evidence and proof boundary
+## Evidence boundary
 
-The repository proves installation/configuration behavior more strongly than outcome quality, and now also enforces the study methodology needed to collect outcome evidence without silently promoting incomplete results.
+CI runs unit/configuration tests on Linux, macOS, and Windows. A real-Codex smoke matrix installs `@openai/codex@0.149.1`, installs CodexLattice globally, validates a temporary `CODEX_HOME`, checks multi-agent and hook backends plus GPT-5.6 route slugs, exercises `adaptive → single → adaptive`, and confirms uninstall restores the baseline.
 
-Blocking CI runs unit/configuration tests on Linux, macOS, and Windows. A real-Codex smoke matrix installs `@openai/codex@0.149.1`, globally installs CodexLattice, validates a temporary `CODEX_HOME`, requires `doctor --strict`, verifies an enabled multi-agent backend and the expected GPT-5.6 route slugs, exercises `single → adaptive`, and confirms uninstall restores the baseline configuration. A separate weekly/manual canary runs the same structural smoke against `@openai/codex@latest`; it is an early-warning signal, not a release guarantee.
-
-The source repository also contains a frozen paired-study contract with a calibration/holdout split, reproducible seeded runner ordering, blind-grading tools, Wilson pass-rate intervals, sanitized evidence export, and a holdout-only fail-closed promotion gate. The current gate requires complete human-score coverage and trustworthy measured reasoning-token coverage; missing usage is never replaced with heuristic cost indices. These research commands are intended for a source checkout and are not required by the installed runtime package.
-
-It deliberately **does not** claim:
-
-- that heuristic quality values are calibrated probabilities;
-- that multiple cheaper agents equal one stronger model;
-- a fixed percentage cost saving or speedup;
-- that local model-catalog visibility proves account entitlement;
-- that CI performs authenticated or paid model calls;
-- that the Codex App native UI is proven to route arbitrary tasks through CodexLattice.
-
-The remaining evidence milestone is to run authenticated repeated trials against the frozen study, independently grade the blind artifacts, collect trustworthy measured efficiency data, pass the holdout promotion gate, and publish the sanitized versioned evidence before any routing calibration claim. See [`docs/evaluation.md`](docs/evaluation.md), [`docs/roadmap.md`](docs/roadmap.md), and [Issue #1](https://github.com/hamburger-os/CodexLattice/issues/1).
+The repository does **not** claim that heuristic quality values are calibrated probabilities, that multiple cheaper agents equal one stronger model, a fixed cost/speed saving, that model-catalog visibility proves account entitlement, that CI performs paid model calls, or that CLI smoke is equivalent to exhaustive Codex App UI validation.
 
 ## Documentation
 
@@ -190,18 +177,9 @@ The remaining evidence milestone is to run authenticated repeated trials against
 - [Architecture](docs/architecture.md)
 - [Codex compatibility](docs/compatibility.md)
 - [Codex App compatibility](docs/codex-app.md)
-- [Evaluation and calibration protocol](docs/evaluation.md)
-- [Research notes](docs/research-notes.md)
+- [Evaluation and calibration](docs/evaluation.md)
 - [Roadmap](docs/roadmap.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security policy](SECURITY.md)
 - [Changelog](CHANGELOG.md)
-
-## Contributing
-
-Bug reports, compatibility findings, policy ideas, benchmark tasks, and focused pull requests are welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) before submitting changes.
-
-For compatibility reports, include the operating system, Node version, Codex version, CodexLattice version, and sanitized `doctor --strict` output. For Codex App findings, also include the App version and whether the problem concerns shared configuration or an App-specific UI/runtime flow. Never post tokens, credentials, or private task content.
 
 ## License
 
