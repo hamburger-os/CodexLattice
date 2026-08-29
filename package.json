@@ -5,7 +5,7 @@
   "type": "module",
   "bin": {"codex-lattice": "./bin/codex-lattice.js"},
   "scripts": {
-    "test": "node --test test/*.test.js",
+    "test": "node --test test/agents.test.js test/codex.test.js test/installer.test.js test/policy.test.js test/runtime.test.js test/telemetry.test.js",
     "check": "node --check bin/codex-lattice.js && node --check src/policy.js && node --check src/installer.js && node --check src/telemetry.js && node --check src/runtime.js && node --check src/roles.js && node --check src/codex.js",
     "test:codex-smoke": "node test/integration/codex-install-smoke.js"
   },

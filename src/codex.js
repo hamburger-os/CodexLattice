@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export const MIN_CODEX_VERSION = '0.149.0';
 export const TESTED_CODEX_VERSION = '0.149.1';
@@ -23,14 +25,77 @@ export function compareVersions(a, b) {
   return 0;
 }
 
+export function windowsNpmLauncherFromShim(shimPath) {
+  if (!shimPath) return null;
+  const candidate = path.join(
+    path.dirname(shimPath),
+    'node_modules',
+    '@openai',
+    'codex',
+    'bin',
+    'codex.js'
+  );
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
+function firstWhere(name) {
+  const result = spawnSync('where.exe', [name], { encoding: 'utf8', windowsHide: true });
+  if (result.status !== 0) return null;
+  return String(result.stdout || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean) || null;
+}
+
+export function resolveCodexInvocation() {
+  const override = process.env.CODEX_LATTICE_CODEX;
+  if (override) {
+    if (/\.m?js$/i.test(override)) {
+      return { command: process.execPath, prefixArgs: [override], source: 'explicit-js-launcher' };
+    }
+    if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(override)) {
+      const launcher = windowsNpmLauncherFromShim(override);
+      if (!launcher) {
+        throw new Error('CODEX_LATTICE_CODEX points to a Windows command shim that cannot be launched safely without a shell. Point it to codex.exe or the @openai/codex bin/codex.js launcher instead.');
+      }
+      return { command: process.execPath, prefixArgs: [launcher], source: 'explicit-npm-shim' };
+    }
+    return { command: override, prefixArgs: [], source: 'explicit' };
+  }
+
+  if (process.platform === 'win32') {
+    const nativeExe = firstWhere('codex.exe');
+    if (nativeExe) return { command: nativeExe, prefixArgs: [], source: 'windows-native' };
+
+    const npmShim = firstWhere('codex.cmd');
+    const launcher = windowsNpmLauncherFromShim(npmShim);
+    if (launcher) {
+      // Do not use shell:true here. User task text is eventually passed as an argument to
+      // `codex exec`; launching the npm JS entrypoint directly avoids cmd.exe parsing it.
+      return { command: process.execPath, prefixArgs: [launcher], source: 'windows-npm-launcher' };
+    }
+
+    return { command: 'codex.exe', prefixArgs: [], source: 'windows-unresolved' };
+  }
+
+  return { command: 'codex', prefixArgs: [], source: 'path' };
+}
+
 export function runCodex(args, { home, cwd = process.cwd(), stdio = 'pipe' } = {}) {
   const env = { ...process.env };
   if (home) env.CODEX_HOME = home;
-  return spawnSync(process.env.CODEX_LATTICE_CODEX || 'codex', args, {
+  let invocation;
+  try {
+    invocation = resolveCodexInvocation();
+  } catch (error) {
+    return { status: null, stdout: '', stderr: '', error };
+  }
+  return spawnSync(invocation.command, [...invocation.prefixArgs, ...args], {
     cwd,
     env,
     stdio,
-    encoding: stdio === 'pipe' ? 'utf8' : undefined
+    encoding: stdio === 'pipe' ? 'utf8' : undefined,
+    windowsHide: true
   });
 }
 

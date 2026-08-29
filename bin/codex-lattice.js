@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
-import { spawnSync } from 'node:child_process';
 import { buildPlan, shadowComparison } from '../src/policy.js';
 import { buildCodexExecArgs } from '../src/runtime.js';
+import { runCodex } from '../src/codex.js';
 import {
   PACKAGE_VERSION,
   assertReadyForRun,
@@ -112,7 +112,7 @@ try {
       executeRoute: compactRoute(plan.stages.execute),
       verifyRoute: compactRoute(plan.stages.verify)
     });
-    const result = spawnSync(process.env.CODEX_LATTICE_CODEX || 'codex', buildCodexExecArgs(task, plan), { stdio: 'inherit' });
+    const result = runCodex(buildCodexExecArgs(task, plan), { stdio: 'inherit' });
     appendTelemetry('run_finished', {
       runId,
       exitCode: result.status ?? 1,
