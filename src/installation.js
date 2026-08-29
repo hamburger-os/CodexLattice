@@ -339,6 +339,14 @@ function removeReceiptRuntime(receipt) {
   return preserved;
 }
 
+function removeSupersededRuntime(previousReceipt, currentRuntime) {
+  const previousDir = previousReceipt?.runtime?.dir;
+  const currentDir = currentRuntime?.dir;
+  if (!previousDir || !currentDir) return [];
+  if (path.resolve(previousDir) === path.resolve(currentDir)) return [];
+  return removeReceiptRuntime(previousReceipt);
+}
+
 function assertOwnedFileCollisionsSafe(home, configText, receipt) {
   if (isManagedActive(configText) || receipt) return;
   const collisions = ownedAgentFilenames()
@@ -367,8 +375,8 @@ function assertRuntimeCollisionSafe(home, receipt) {
   }
 }
 
-function writeManagedHooks(home, existingText) {
-  const preexisting = fs.existsSync(hooksPath(home));
+function writeManagedHooks(home, existingText, previousReceipt) {
+  const preexisting = previousReceipt?.hook?.preexisting ?? fs.existsSync(hooksPath(home));
   const document = parseHooksDocument(existingText);
   const next = withManagedHook(document, home, PACKAGE_VERSION);
   const text = renderHooksDocument(next);
@@ -492,7 +500,7 @@ export function install(mode = 'adaptive', { home = codexHome(), runner = runCod
     if (mode === 'adaptive') {
       roles = writeRouteRoles(home);
       runtime = writeHookRuntime(home);
-      hook = writeManagedHooks(home, existingHooks);
+      hook = writeManagedHooks(home, existingHooks, previousReceipt);
       atomicWrite(config, adaptiveConfig(existingConfig));
     } else {
       atomicWrite(config, passthroughConfig(existingConfig));
@@ -503,6 +511,9 @@ export function install(mode = 'adaptive', { home = codexHome(), runner = runCod
 
     const validation = validateNativeInstall(home, runner);
     if (validation.overallStatus === 'error') throw new Error(validation.errors.join(' '));
+    const preservedSupersededRuntimeFiles = mode === 'adaptive'
+      ? removeSupersededRuntime(previousReceipt, runtime)
+      : [];
     const receipt = writeReceipt(home, { mode, codexVersion: validation.version, roles, hook, runtime, validation });
     return {
       home,
@@ -512,6 +523,7 @@ export function install(mode = 'adaptive', { home = codexHome(), runner = runCod
       mode,
       transparentRouting: mode === 'adaptive',
       trustReview: mode === 'adaptive' ? 'Codex may request one-time hook review on first launch/use.' : null,
+      preservedSupersededRuntimeFiles,
       validation,
       receipt
     };
@@ -546,7 +558,7 @@ export function setMode(mode, { home = codexHome(), runner = runCodex } = {}) {
     if (mode === 'adaptive') {
       roles = writeRouteRoles(home);
       runtime = writeHookRuntime(home);
-      hook = writeManagedHooks(home, existingHooks);
+      hook = writeManagedHooks(home, existingHooks, previousReceipt);
       atomicWrite(config, adaptiveConfig(existingConfig));
     } else {
       atomicWrite(config, passthroughConfig(existingConfig));
@@ -556,6 +568,9 @@ export function setMode(mode, { home = codexHome(), runner = runCodex } = {}) {
     }
     const validation = validateNativeInstall(home, runner);
     if (validation.overallStatus === 'error') throw new Error(validation.errors.join(' '));
+    const preservedSupersededRuntimeFiles = mode === 'adaptive'
+      ? removeSupersededRuntime(previousReceipt, runtime)
+      : [];
     const receipt = writeReceipt(home, { mode, codexVersion: validation.version, roles, hook, runtime, validation });
     return {
       home,
@@ -564,6 +579,7 @@ export function setMode(mode, { home = codexHome(), runner = runCodex } = {}) {
       mode,
       transparentRouting: mode === 'adaptive',
       trustReview: mode === 'adaptive' ? 'Codex may request one-time hook review on first launch/use.' : null,
+      preservedSupersededRuntimeFiles,
       validation,
       receipt
     };
