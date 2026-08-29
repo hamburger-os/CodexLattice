@@ -144,6 +144,12 @@ codex-lattice mode adaptive
 codex-lattice uninstall
 ```
 
+## Codex App 兼容性
+
+CodexLattice 将 CLI 支持、共享 Codex 配置兼容性、桌面 App 原生 UI 编排视为三种不同的证据层级。受管理的 role/config 以可与读取同一 Codex 配置面的客户端共存为目标，因此 **Codex App 的共享配置兼容是明确适配目标**。
+
+但 CLI smoke 通过并不能证明“从 Codex App UI 发起任意任务时一定自动进入 `codex-lattice run`”。目前不声称原生 App UI 编排已被验证。支持边界和桌面端人工验收清单见 [`docs/codex-app.md`](docs/codex-app.md)。
+
 ## 本地遥测（默认关闭）
 
 Telemetry 默认关闭并且仅保存在本地。CodexLattice telemetry 不会写入原始任务文本。
@@ -161,9 +167,11 @@ codex-lattice feedback <run-id> mixed "tests pass but implementation is too inva
 
 ## 当前证据边界
 
-当前仓库对“安装与配置确实生效”的证明强于“路由一定提升最终任务效果”的证明。
+当前仓库对“安装与配置确实生效”的证明强于“路由一定提升最终任务效果”，同时已经把收集结果证据所需的方法学约束做成可执行的 fail-closed 机制，避免用不完整结果直接推动默认策略。
 
-CI 在 Linux、macOS、Windows 上运行单元/配置测试；真实 Codex smoke matrix 会安装 `@openai/codex@0.149.1`、全局安装 CodexLattice、创建临时 `CODEX_HOME`、要求 `doctor --strict` 通过、验证有效 multi-agent backend 与 GPT-5.6 路线 slug，执行 `single → adaptive`，并证明卸载后基线配置被恢复。
+阻塞式 CI 在 Linux、macOS、Windows 上运行单元/配置测试；真实 Codex smoke matrix 会安装 `@openai/codex@0.149.1`、全局安装 CodexLattice、创建临时 `CODEX_HOME`、要求 `doctor --strict` 通过、验证有效 multi-agent backend 与 GPT-5.6 路线 slug，执行 `single → adaptive`，并证明卸载后基线配置被恢复。另有每周/手动 `@openai/codex@latest` canary 执行同类结构性 smoke；它只是提前发现兼容性变化的信号，不是发布保证。
+
+源码仓库还包含固定版本的 paired-study contract：校准/holdout 切分、可复现 seeded runner 顺序、盲评工具、pass rate 的 Wilson 95% 区间、脱敏 evidence export，以及只使用 holdout 的 fail-closed promotion gate。当前 gate 要求人类评分完整覆盖，并要求可信的实测 reasoning-token 覆盖；缺失 usage 不会用 heuristic cost index 填补。这些研究命令面向源码 checkout，不是安装后运行时的必需组成部分。
 
 目前**不会声称**：
 
@@ -171,15 +179,18 @@ CI 在 Linux、macOS、Windows 上运行单元/配置测试；真实 Codex smoke
 - 多个廉价 agent 必然等价于一个更强模型；
 - 固定百分比的成本节省或速度提升；
 - 本地 model catalog 可见就代表账户一定拥有模型权限；
-- CI 已进行认证/付费模型调用。
+- CI 已进行认证/付费模型调用；
+- Codex App 原生 UI 已被证明会把任意任务自动路由到 CodexLattice。
 
-下一项关键工程里程碑是可复现 paired evaluation 与 calibration。见 [`docs/roadmap.md`](docs/roadmap.md) 和 [Issue #1](https://github.com/hamburger-os/CodexLattice/issues/1)。
+剩余证据里程碑是：针对冻结的 study 做认证重复试验、独立完成盲评、采集可信的实测效率数据、通过 holdout promotion gate，并在任何路由校准结论之前发布脱敏且版本化的证据集。详见 [`docs/evaluation.md`](docs/evaluation.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [Issue #1](https://github.com/hamburger-os/CodexLattice/issues/1)。
 
 ## 文档
 
 - [安装说明](docs/installation.md)
 - [架构](docs/architecture.md)
-- [评测协议](docs/evaluation.md)
+- [Codex 兼容性](docs/compatibility.md)
+- [Codex App 兼容边界](docs/codex-app.md)
+- [评测与校准协议](docs/evaluation.md)
 - [研究笔记](docs/research-notes.md)
 - [路线图](docs/roadmap.md)
 - [贡献指南](CONTRIBUTING.md)
@@ -190,7 +201,7 @@ CI 在 Linux、macOS、Windows 上运行单元/配置测试；真实 Codex smoke
 
 欢迎提交 bug、Codex 兼容性报告、路由策略建议、benchmark task 和聚焦的 Pull Request。提交前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
 
-兼容性问题请附上操作系统、Node 版本、Codex 版本、CodexLattice 版本以及经过脱敏的 `doctor --strict` 输出。请勿发布 token、凭据或私人任务内容。
+兼容性问题请附上操作系统、Node 版本、Codex 版本、CodexLattice 版本以及经过脱敏的 `doctor --strict` 输出。Codex App 相关问题还应附上 App 版本，并注明问题属于共享配置还是 App 特有的 UI/runtime 流程。请勿发布 token、凭据或私人任务内容。
 
 ## License
 
