@@ -79,7 +79,7 @@ UserPromptSubmit Hook
 
 JavaScript policy 仍然是路由权威。Hook 注入 developer context 的只有**派生路由元数据与 coordinator 规则**，不会把原始用户 prompt 复制到 developer context。对于需要仓库、工具、代码修改或测试的任务，root 被要求协调精确选中的 route-specific agent，而不是自己重新猜模型。
 
-Subagent 的 `UserPromptSubmit` turn 会被直接忽略，避免 Lattice 递归路由。Hook 自身发生异常时也采用 fail-open：普通 Codex 仍然可以继续工作。
+Subagent 的 `UserPromptSubmit` turn 会被直接忽略，避免 Lattice 递归路由。Hook 自身发生异常时也采用 fail-open：普通 Codex 仍然可以继续工作。Codex 原生的 collaboration mode、sandbox 与 approval 约束始终拥有更高优先级；Hook 的 `permission_mode` 只作为审批元数据，不会被 CodexLattice 猜测为 Plan mode。
 
 ## 路由目标
 
@@ -121,6 +121,8 @@ codex-lattice run "refactor authentication across three modules"
 `codex-lattice install` 会校验 Codex、保留无关的配置/role/Hook、安装路线角色与版本化 Hook runtime、合并 managed Hook、让 Codex 自己解析结果、检查 multi-agent / hooks / model catalog 信号，并把所有受管理资产的哈希写入 receipt。
 
 如果验证失败，受管理修改会自动回滚。`doctor --strict` 会检查 managed config block、role hash、Hook handler、runtime hash、Codex 版本、multi-agent backend、hooks feature 与本地模型目录。
+
+Adaptive 重装会保留 `hooks.json` 在首次安装前是否已经存在的原始所有权状态，因此卸载仍然精确可逆。版本升级时，仍保持 receipt 哈希的旧 runtime 会被安全清理；如果旧 runtime 文件曾被外部修改，则会保留而不是猜测性删除。
 
 CodexLattice 不会替用户写入 Codex 的 Hook trust state。
 
@@ -167,7 +169,7 @@ codex-lattice feedback <run-id> pass
 
 ## 证据边界
 
-CI 在 Linux、macOS、Windows 上执行单元与配置测试。真实 Codex smoke matrix 会安装 `@openai/codex@0.149.1`、全局安装 CodexLattice、验证临时 `CODEX_HOME`、确认 multi-agent 与 hooks backend 以及 GPT-5.6 route slug、执行 `adaptive → single → adaptive`，并确认卸载后恢复基线。
+CI 在 Linux、macOS、Windows 上执行单元与配置测试。真实 Codex smoke matrix 会安装 `@openai/codex@0.149.1`、全局安装 CodexLattice、验证临时 `CODEX_HOME`、确认 multi-agent 与 hooks backend 以及 GPT-5.6 route slug、执行安装后的透明 runtime / 平台 launcher、覆盖包含空格的 `CODEX_HOME` 路径、执行 `adaptive → single → adaptive`，并确认卸载后恢复基线。
 
 项目**不会声称** heuristic quality 已经校准为概率、多个廉价 agent 必然等价于一个强模型、固定百分比的成本/速度收益、model catalog 可见就等于账户 entitlement、CI 已执行付费模型调用，或 CLI smoke 等价于对所有 Codex App UI 版本的完整验证。
 
