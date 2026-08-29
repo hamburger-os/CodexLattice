@@ -4,6 +4,7 @@ import path from 'node:path';
 
 export const MIN_CODEX_VERSION = '0.149.0';
 export const TESTED_CODEX_VERSION = '0.149.1';
+const LATTICE_HOOK_MARKER = '--codex-lattice-hook-v1';
 
 function versionTuple(version) {
   const match = String(version || '').match(/(?:^|\s|v)(\d+)\.(\d+)\.(\d+)(?:\D|$)/);
@@ -108,6 +109,17 @@ function runnerFailure(result) {
   return resultText(result) || `exit ${result?.status ?? 'unknown'}`;
 }
 
+function transparentHookInstalled(home) {
+  if (!home) return false;
+  const file = path.join(home, 'hooks.json');
+  if (!fs.existsSync(file)) return false;
+  try {
+    return fs.readFileSync(file, 'utf8').includes(LATTICE_HOOK_MARKER);
+  } catch {
+    return false;
+  }
+}
+
 export function probeCodex({ home, runner = runCodex, checkConfig = true, checkModels = true } = {}) {
   const checks = [];
   const errors = [];
@@ -160,13 +172,22 @@ export function probeCodex({ home, runner = runCodex, checkConfig = true, checkM
         errors.push('Codex does not report an enabled multi-agent backend; adaptive orchestration cannot be guaranteed to work.');
       }
 
+      const requiresHooks = transparentHookInstalled(home);
       if (featureStates.has('hooks')) {
         const hooksEnabled = featureStates.get('hooks') === true;
         checks.push({ name: 'hooks_backend', ok: hooksEnabled, detail: `hooks=${hooksEnabled}` });
-        if (!hooksEnabled) warnings.push('Codex reports hooks=false; transparent prompt routing will not run until hooks are enabled.');
+        if (!hooksEnabled && requiresHooks) {
+          errors.push('Codex reports hooks=false while the CodexLattice transparent hook is installed; ordinary prompt routing cannot work.');
+        } else if (!hooksEnabled) {
+          warnings.push('Codex reports hooks=false; transparent prompt routing is unavailable in the current configuration.');
+        }
       } else {
         checks.push({ name: 'hooks_backend', ok: null, detail: 'hooks feature key was not reported by this Codex build' });
-        warnings.push('Could not verify the hooks feature from `codex features list`; transparent routing requires UserPromptSubmit hooks.');
+        if (requiresHooks) {
+          errors.push('Could not verify an enabled hooks backend while the CodexLattice transparent hook is installed.');
+        } else {
+          warnings.push('Could not verify the hooks feature from `codex features list`.');
+        }
       }
     }
   }
