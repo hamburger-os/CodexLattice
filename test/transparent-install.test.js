@@ -24,10 +24,16 @@ function runInstalledHookLauncher(receipt, payload) {
   assert.ok(launcher, `missing ${launcherName}`);
 
   if (process.platform === 'win32') {
-    return spawnSync('cmd.exe', ['/d', '/s', '/c', `call "${launcher}" ${HOOK_MARKER}`], {
+    // Codex 0.149.x invokes command hooks through `cmd.exe /C` and appends the
+    // complete hook command as a raw, outer-quoted command tail. Node normally
+    // re-quotes argv on Windows, so windowsVerbatimArguments is required here
+    // to exercise the same parsing path instead of testing Node's argv encoder.
+    const commandLine = `call "${launcher}" ${HOOK_MARKER}`;
+    return spawnSync(process.env.ComSpec || 'cmd.exe', ['/C', `"${commandLine}"`], {
       input: JSON.stringify(payload),
       encoding: 'utf8',
-      windowsHide: true
+      windowsHide: true,
+      windowsVerbatimArguments: true
     });
   }
   return spawnSync(launcher, [HOOK_MARKER], {
