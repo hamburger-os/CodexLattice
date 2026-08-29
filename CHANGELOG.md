@@ -14,18 +14,21 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 - treat the root Codex process as a coordinator for substantive repository/tool work and delegate to exact route-specific native roles;
 - ignore subagent prompt hooks to prevent recursive Lattice orchestration;
 - fail open on hook/runtime errors and skip explicit-null-transcript internal/non-resumable turns by default;
-- retain `codex-lattice run` as an advanced/CI path and mark its child process to bypass transparent re-entry.
+- retain `codex-lattice run` as an advanced/CI path and mark its child process to bypass transparent re-entry;
+- preserve native Codex collaboration-mode, sandbox, and approval restrictions instead of inferring Plan mode from hook approval metadata.
 
 ### Installation and compatibility
 
 - add a versioned self-contained hook runtime under `CODEX_HOME/codex-lattice/runtime/<version>` with pinned Node launchers for Unix and Windows;
 - merge exactly one marker-owned Lattice handler into `hooks.json` while preserving unrelated user hooks;
+- preserve original `hooks.json` ownership across adaptive reinstalls so uninstall remains exact and reversible;
+- retire unchanged superseded versioned runtimes during upgrades while preserving any runtime file whose hash shows user modification;
 - extend the installation receipt to schema v2 with hook/runtime integrity metadata;
 - extend `doctor --strict` to validate the managed hook, runtime hashes, hooks feature, multi-agent backend, and existing config/role integrity;
 - fail adaptive installation when Codex reports the effective hooks backend disabled while the transparent handler is installed;
 - preserve transactional rollback across config, roles, hooks, runtime, and receipt;
 - extend the real-Codex 0.149.1 smoke matrix to validate transparent routing assets across Ubuntu, macOS, and Windows;
-- execute the copied self-contained hook runtime in unit CI rather than only checking that its files exist;
+- execute the copied self-contained hook runtime in unit CI, including platform launchers from a `CODEX_HOME` containing spaces;
 - update package verification to require the new transparent-runtime source modules.
 
 ### Evaluation and evidence
