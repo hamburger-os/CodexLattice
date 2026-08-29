@@ -7,13 +7,26 @@ CodexLattice releases are designed to be reproducible and reviewable. The canoni
 The current release path is:
 
 1. merge a reviewed version/changelog PR to `main`;
-2. create an annotated or signed `vX.Y.Z` tag pointing at that `main` commit;
-3. `.github/workflows/release.yml` re-runs tests and package verification;
-4. the workflow packs the exact installable tarball from the tagged source;
-5. the tarball is installed in a clean temporary prefix and its CLI version is checked;
-6. the workflow publishes a GitHub Release with generated notes, the tarball, and `SHA256SUMS.txt`.
+2. add a reviewed `.github/release-requests/vX.Y.Z.json` request that pins the exact release commit SHA;
+3. `.github/workflows/release-request.yml` verifies that the target is an ancestor of reviewed `main`, that `package.json` and `CHANGELOG.md` agree with the requested version, and that an existing tag is not being moved;
+4. the release-request workflow creates an annotated immutable tag and dispatches `.github/workflows/release.yml` for that tag;
+5. the release workflow re-runs tests and package verification, packs the exact installable tarball, and verifies a clean global install;
+6. the workflow publishes or refreshes a GitHub Release with generated notes, the tarball, and `SHA256SUMS.txt`.
 
-The repository does not require npm credentials, an npm environment, or a long-lived publish token.
+The repository does not require npm credentials, an npm environment, or a long-lived publish token. Release tags are created only from reviewed request manifests merged through the protected default branch.
+
+## Release request format
+
+A request is intentionally tiny and immutable:
+
+```json
+{
+  "version": "0.2.6",
+  "targetSha": "<full 40-character release commit SHA>"
+}
+```
+
+The filename must be exactly `v0.2.6.json` for version `0.2.6`. The target SHA must already be contained in the reviewed branch. If the tag already exists, the request is accepted only when it resolves to the exact same commit; tag movement fails closed.
 
 ## npm status
 
@@ -26,18 +39,18 @@ The project remains npm-package-compatible because Git-based global installs and
 
 ## Routine release checklist
 
-Before tagging:
+Before opening the release-request PR:
 
 - update `package.json` version;
 - move relevant `CHANGELOG.md` entries from `Unreleased` into the release version;
 - ensure `required / ci` and CodeQL are green on the release commit;
 - run `npm run verify:package` locally when practical;
-- confirm the tag will point at the intended `main` commit.
+- record the exact intended `main` commit SHA in `.github/release-requests/vX.Y.Z.json`.
 
-Then create and push `vX.Y.Z`. The release workflow rejects tags that do not exactly match the package version.
+After the request PR is merged, the tag and GitHub Release are automated. The release workflow rejects any tag that does not exactly match the package version at the tagged source.
 
 ## Recovery and reruns
 
-GitHub Release asset upload uses replacement mode. If a run fails after the release is created, rerunning the tag workflow can safely refresh the tarball and checksum assets from the same immutable tag.
+`release.yml` also supports an explicit `workflow_dispatch` input named `tag`. This is the recovery path when a verified tag exists but the release job needs to be retried. GitHub Release asset upload uses replacement mode, so rerunning against the same immutable tag safely refreshes the tarball and checksum assets.
 
 Never move an existing release tag to different source content. Bump the version instead.
