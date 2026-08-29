@@ -81,8 +81,8 @@ export function resolveCodexInvocation() {
   return { command: 'codex', prefixArgs: [], source: 'path' };
 }
 
-export function runCodex(args, { home, cwd = process.cwd(), stdio = 'pipe' } = {}) {
-  const env = { ...process.env };
+export function runCodex(args, { home, cwd = process.cwd(), stdio = 'pipe', env: extraEnv = {} } = {}) {
+  const env = { ...process.env, ...extraEnv };
   if (home) env.CODEX_HOME = home;
   let invocation;
   try {
@@ -132,7 +132,7 @@ export function probeCodex({ home, runner = runCodex, checkConfig = true, checkM
   const execHelpText = resultText(execHelp);
   const execFlagsOk = execHelp?.status === 0 && /--model\b/.test(execHelpText) && /(?:^|\s)-c\b|--config\b/m.test(execHelpText);
   checks.push({ name: 'exec_runtime_overrides', ok: execFlagsOk, detail: execFlagsOk ? '--model and config override are available' : runnerFailure(execHelp) });
-  if (!execFlagsOk) errors.push('This Codex CLI does not expose the runtime --model/config override surface required by CodexLattice.');
+  if (!execFlagsOk) errors.push('This Codex CLI does not expose the runtime --model/config override surface required by the explicit CodexLattice run command.');
 
   let featuresText = null;
   if (checkConfig && errors.length === 0) {
@@ -158,6 +158,15 @@ export function probeCodex({ home, runner = runCodex, checkConfig = true, checkM
       });
       if (!multiAgentEnabled) {
         errors.push('Codex does not report an enabled multi-agent backend; adaptive orchestration cannot be guaranteed to work.');
+      }
+
+      if (featureStates.has('hooks')) {
+        const hooksEnabled = featureStates.get('hooks') === true;
+        checks.push({ name: 'hooks_backend', ok: hooksEnabled, detail: `hooks=${hooksEnabled}` });
+        if (!hooksEnabled) warnings.push('Codex reports hooks=false; transparent prompt routing will not run until hooks are enabled.');
+      } else {
+        checks.push({ name: 'hooks_backend', ok: null, detail: 'hooks feature key was not reported by this Codex build' });
+        warnings.push('Could not verify the hooks feature from `codex features list`; transparent routing requires UserPromptSubmit hooks.');
       }
     }
   }
