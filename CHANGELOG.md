@@ -18,11 +18,18 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 - CI evaluation contract that validates corpus, runner, study, and full seeded planning without authenticated or paid model calls;
 - weekly/manual cross-platform `@openai/codex@latest` structural compatibility canary.
 
+### Security and reliability
+
+- full-study execution refuses to append to an existing result set or reuse an existing study manifest;
+- blind grading refuses to overwrite an existing de-blinding key, and grade application rejects duplicate blind IDs, ambiguous key mappings, duplicate raw run IDs, and mappings to unknown runs;
+- promotion requires current corpus/runner versions, duplicate-free paired trials, and matching candidate/baseline execution environments;
+- public evidence export rejects both mixed versions and a single internally consistent but stale corpus or runner-config version.
+
 ### Documentation
 
 - expanded evaluation protocol for frozen study design, repeated paired trials, blind grading, uncertainty, usage coverage, promotion gating, calibration/holdout separation, and sanitized evidence publication;
 - documented the Codex App support boundary: shared Codex configuration compatibility is a target, while native App UI orchestration is not claimed without desktop verification;
-- synchronized English/Chinese README, compatibility policy, and roadmap with the implemented evidence controls and remaining external evidence work.
+- synchronized English/Chinese README, compatibility policy, research notes, issue-reporting guidance, and roadmap with the implemented evidence controls and remaining external evidence work.
 
 ## 0.2.7
 
