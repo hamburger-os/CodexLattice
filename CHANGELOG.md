@@ -11,11 +11,16 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 - contribution, security, code-of-conduct, issue, and pull-request guidance;
 - roadmap for release hardening and paired evaluation;
 - package repository/homepage/bug metadata;
-- Dependabot and CodeQL configuration.
+- Dependabot and CodeQL configuration;
+- stable `required / ci` branch-protection gate and npm package-manifest verification;
+- npm Trusted Publishing/OIDC release workflow with integrity-aware reruns, checksums, and GitHub Release assets;
+- OpenSSF Scorecard workflow with SARIF upload to GitHub code scanning;
+- release-process and Codex compatibility documentation.
 
 ### Changed
 
-- README reorganized around quick start, native-role architecture, integrity guarantees, and explicit evidence boundaries.
+- README reorganized around quick start, native-role architecture, integrity guarantees, and explicit evidence boundaries;
+- GitHub Actions dependencies used by CI/security workflows are pinned to immutable commit SHAs.
 
 ## 0.2.4
 

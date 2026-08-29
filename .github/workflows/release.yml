@@ -1,0 +1,72 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish npm and GitHub release
+    if: github.repository == 'hamburger-os/CodexLattice'
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Verify npm supports trusted publishing
+        run: |
+          node --version
+          npm --version
+          node -e "const v=require('child_process').execFileSync('npm',['--version'],{encoding:'utf8'}).trim().split('.').map(Number); if(v[0] < 11 || (v[0] === 11 && v[1] < 5) || (v[0] === 11 && v[1] === 5 && v[2] < 1)){throw new Error('npm >= 11.5.1 is required for trusted publishing')}"
+      - name: Verify tag matches package version
+        run: node -e "const p=JSON.parse(require('fs').readFileSync('package.json','utf8')); if(process.env.GITHUB_REF_NAME !== 'v'+p.version){throw new Error('tag '+process.env.GITHUB_REF_NAME+' does not match package version '+p.version)}"
+      - run: npm test
+      - run: npm run check
+      - run: npm run verify:package
+      - name: Pack release tarball
+        run: |
+          npm pack --json > pack.json
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('pack.json','utf8'))[0]; fs.appendFileSync(process.env.GITHUB_ENV, 'TARBALL='+p.filename+'\nLOCAL_INTEGRITY='+p.integrity+'\n');"
+          sha256sum "$(node -p "JSON.parse(require('fs').readFileSync('pack.json','utf8'))[0].filename")" > SHA256SUMS.txt
+      - name: Verify tarball installs cleanly
+        run: |
+          PREFIX="$(mktemp -d)"
+          npm install --global --prefix "$PREFIX" "./$TARBALL"
+          "$PREFIX/bin/codex-lattice" version
+      - name: Publish to npm with OIDC
+        run: |
+          NAME="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).name")"
+          VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")"
+          REGISTRY_INTEGRITY="$(npm view "$NAME@$VERSION" dist.integrity 2>/dev/null || true)"
+          if [ -n "$REGISTRY_INTEGRITY" ]; then
+            test "$REGISTRY_INTEGRITY" = "$LOCAL_INTEGRITY" || { echo "Registry version exists with different integrity"; exit 1; }
+            echo "$NAME@$VERSION is already published with matching integrity; skipping duplicate publish."
+          else
+            npm publish --access public
+          fi
+      - name: Create or refresh GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$TARBALL" SHA256SUMS.txt --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$TARBALL" SHA256SUMS.txt --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          fi
