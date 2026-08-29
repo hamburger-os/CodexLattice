@@ -11,7 +11,8 @@ import {
   sha256
 } from './roles.js';
 
-export const PACKAGE_VERSION = '0.2.4';
+const packageJson = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+export const PACKAGE_VERSION = packageJson.version;
 export const START = '# >>> CodexLattice managed block >>>';
 export const END = '# <<< CodexLattice managed block <<<';
 

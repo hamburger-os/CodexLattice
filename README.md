@@ -19,11 +19,11 @@
 
 CodexLattice routes planning, exploration, execution, and verification through native Codex agent roles. It tries to stay inside a near-optimal quality envelope first, then uses the least expensive eligible route. Quality is the constraint; cost is the tie-breaker.
 
-> **Current release: v0.2.6.** Installation and runtime enforcement are fail-closed: CodexLattice validates the real Codex CLI, installs route-specific native roles, records hashes in a receipt, and refuses to run when the validated state drifts.
+> **Current release: v0.2.7.** Installation and runtime enforcement are fail-closed: CodexLattice validates the real Codex CLI, installs route-specific native roles, records hashes in a receipt, and refuses to run when the validated state drifts.
 
 ## Quick start
 
-Prerequisites: **Node.js >= 20** and **Codex CLI >= 0.149.0**. CodexLattice v0.2.6 is integration-tested against Codex 0.149.1.
+Prerequisites: **Node.js >= 20** and **Codex CLI >= 0.149.0**. CodexLattice v0.2.7 is integration-tested against Codex 0.149.1.
 
 ```bash
 npm install -g @openai/codex
