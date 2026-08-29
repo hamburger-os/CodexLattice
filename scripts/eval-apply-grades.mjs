@@ -20,20 +20,42 @@ function parseArgs(argv) {
 const args = parseArgs(process.argv.slice(2));
 const results = parseJsonLines(fs.readFileSync(args.file, 'utf8'));
 for (const row of results) validateResultRecord(row);
+const resultRunIds = new Set();
+for (const row of results) {
+  if (resultRunIds.has(row.runId)) throw new Error(`duplicate result runId: ${row.runId}`);
+  resultRunIds.add(row.runId);
+}
+
 const key = JSON.parse(fs.readFileSync(args.key, 'utf8'));
 const grades = JSON.parse(fs.readFileSync(args.grades, 'utf8'));
 if (key.schemaVersion !== 'blind-key-1' || !Array.isArray(key.entries)) throw new Error('invalid blind key');
 if (grades.schemaVersion !== 'blind-grades-1' || !Array.isArray(grades.entries)) throw new Error('invalid grades file');
-const mapping = new Map(key.entries.map((entry) => [entry.blindId, entry]));
+
+const mapping = new Map();
+const mappedRunIds = new Set();
+for (const entry of key.entries) {
+  if (typeof entry?.blindId !== 'string' || !entry.blindId) throw new Error('blind key entry is missing blindId');
+  if (typeof entry?.runId !== 'string' || !entry.runId) throw new Error(`blind key entry is missing runId: ${entry.blindId}`);
+  if (mapping.has(entry.blindId)) throw new Error(`duplicate blindId in key: ${entry.blindId}`);
+  if (mappedRunIds.has(entry.runId)) throw new Error(`duplicate runId in key: ${entry.runId}`);
+  if (!resultRunIds.has(entry.runId)) throw new Error(`blind key references unknown runId: ${entry.runId}`);
+  mapping.set(entry.blindId, entry);
+  mappedRunIds.add(entry.runId);
+}
+
+const seenBlindIds = new Set();
 const gradeByRunId = new Map();
 for (const grade of grades.entries) {
-  if (gradeByRunId.has(grade.blindId)) throw new Error(`duplicate grade: ${grade.blindId}`);
+  if (typeof grade?.blindId !== 'string' || !grade.blindId) throw new Error('grade is missing blindId');
+  if (seenBlindIds.has(grade.blindId)) throw new Error(`duplicate grade: ${grade.blindId}`);
+  seenBlindIds.add(grade.blindId);
   const mapped = mapping.get(grade.blindId);
   if (!mapped) throw new Error(`grade references unknown blindId: ${grade.blindId}`);
   if (!Number.isFinite(grade.score) || grade.score < 0 || grade.score > 4) throw new Error(`grade score must be 0..4: ${grade.blindId}`);
   if (grade.humanLabel !== undefined && grade.humanLabel !== null && typeof grade.humanLabel !== 'string') throw new Error(`humanLabel must be text or null: ${grade.blindId}`);
   gradeByRunId.set(mapped.runId, { score: grade.score, humanLabel: grade.humanLabel ?? null, notes: null });
 }
+
 const output = results.map((row) => gradeByRunId.has(row.runId) ? { ...row, outcome: gradeByRunId.get(row.runId) } : row);
 fs.mkdirSync(path.dirname(args.out), { recursive: true });
 fs.writeFileSync(args.out, `${output.map((row) => JSON.stringify(row)).join('\n')}\n`, 'utf8');
