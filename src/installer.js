@@ -5,19 +5,43 @@ import path from 'node:path';
 const START = '# >>> CodexLattice managed block >>>';
 const END = '# <<< CodexLattice managed block <<<' ;
 
-const adaptiveBlock = `${START}\n# CodexLattice adaptive mode\n[agents]\nenabled = true\nmax_concurrent_threads_per_session = 3\ndefault_subagent_model = "gpt-5.6-terra"\ndefault_subagent_reasoning_effort = "medium"\n\n[agents.lattice_explorer]\ndescription = "Bounded repository exploration; return evidence, paths and uncertainty."\nconfig_file = "agents/codex-lattice-explorer.toml"\n\n[agents.lattice_planner]\ndescription = "Plan complex or ambiguous work before implementation."\nconfig_file = "agents/codex-lattice-planner.toml"\n\n[agents.lattice_implementer]\ndescription = "Implement one bounded workstream and validate it."\nconfig_file = "agents/codex-lattice-implementer.toml"\n\n[agents.lattice_reviewer]\ndescription = "Independent correctness, regression and security review."\nconfig_file = "agents/codex-lattice-reviewer.toml"\n${END}`;
+const adaptiveBlock = `${START}
+# CodexLattice adaptive mode
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+default_subagent_model = "gpt-5.6-terra"
+default_subagent_reasoning_effort = "medium"
 
-function managedPattern() {
-  const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`${escape(START)}[\\s\\S]*?${escape(END)}\\n?`, 'm');
-}
+[agents.lattice_explorer]
+description = "Bounded repository exploration; return evidence, paths and uncertainty."
+config_file = "agents/codex-lattice-explorer.toml"
+
+[agents.lattice_planner]
+description = "Plan complex or ambiguous work before implementation."
+config_file = "agents/codex-lattice-planner.toml"
+
+[agents.lattice_implementer]
+description = "Implement one bounded workstream and validate it."
+config_file = "agents/codex-lattice-implementer.toml"
+
+[agents.lattice_reviewer]
+description = "Independent correctness, regression and security review."
+config_file = "agents/codex-lattice-reviewer.toml"
+${END}`;
 
 function withoutManaged(text) {
-  return text.replace(managedPattern(), '').trimEnd();
+  const start = text.indexOf(START);
+  if (start === -1) return text.trimEnd();
+  const end = text.indexOf(END, start);
+  if (end === -1) throw new Error('malformed CodexLattice managed block: missing end marker');
+  const after = end + END.length;
+  const suffix = text.slice(after).replace(/^\r?\n/, '');
+  return `${text.slice(0, start)}${suffix}`.trimEnd();
 }
 
 function hasAgentsTable(text) {
-  return /^\\s*\\[agents(?:\\.|\\])/m.test(text);
+  return /^\s*\[agents(?:\.|\])/m.test(text);
 }
 
 function adaptiveConfig(text) {
