@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { doctor, install, setMode, uninstall } from '../src/installer.js';
 import { HOOK_MARKER, managedHookLocations, parseHooksDocument } from '../src/hooks.js';
-import { supportedCodexRunner } from './helpers.js';
+import { hooksDisabledCodexRunner, supportedCodexRunner } from './helpers.js';
 
 function withTempHome(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-lattice-transparent-'));
@@ -37,6 +38,36 @@ test('adaptive install creates transparent hook runtime and preserves unrelated 
   assert.equal(result.transparentRouting, true);
 }));
 
+test('installed self-contained hook runtime executes without resolving the npm package', () => withTempHome((home) => {
+  const result = install('adaptive', { home, runner: supportedCodexRunner });
+  const runnerFile = result.receipt.runtime.files.find((entry) => entry.filename === 'hook-runner.js')?.file;
+  assert.ok(runnerFile);
+
+  const payload = {
+    session_id: 'session-installed-runtime',
+    turn_id: 'turn-installed-runtime',
+    agent_id: null,
+    agent_type: null,
+    transcript_path: path.join(home, 'rollout.jsonl'),
+    cwd: home,
+    hook_event_name: 'UserPromptSubmit',
+    model: 'gpt-5.6-luna',
+    permission_mode: 'default',
+    prompt: 'refactor authentication across multiple modules'
+  };
+  const child = spawnSync(process.execPath, [runnerFile], {
+    input: JSON.stringify(payload),
+    encoding: 'utf8',
+    windowsHide: true
+  });
+
+  assert.equal(child.status, 0, child.stderr);
+  const output = JSON.parse(child.stdout);
+  assert.equal(output.continue, true);
+  assert.equal(output.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+  assert.match(output.hookSpecificOutput.additionalContext, /root process is a coordinator/i);
+}));
+
 test('adaptive install rejects hooks=false before touching user files', () => withTempHome((home) => {
   const config = path.join(home, 'config.toml');
   const original = '[features]\nhooks = false\n';
@@ -44,6 +75,20 @@ test('adaptive install rejects hooks=false before touching user files', () => wi
   assert.throws(() => install('adaptive', { home, runner: supportedCodexRunner }), /hooks are explicitly disabled/);
   assert.equal(fs.readFileSync(config, 'utf8'), original);
   assert.equal(fs.existsSync(path.join(home, 'hooks.json')), false);
+}));
+
+test('adaptive install rolls back when Codex reports the effective hooks backend disabled', () => withTempHome((home) => {
+  const config = path.join(home, 'config.toml');
+  const baseline = 'model_reasoning_effort = "medium"\n';
+  fs.writeFileSync(config, baseline);
+
+  assert.throws(
+    () => install('adaptive', { home, runner: hooksDisabledCodexRunner }),
+    /hooks=false.*ordinary prompt routing cannot work/i
+  );
+  assert.equal(fs.readFileSync(config, 'utf8'), baseline);
+  assert.equal(fs.existsSync(path.join(home, 'hooks.json')), false);
+  assert.equal(fs.existsSync(path.join(home, 'codex-lattice', 'install.json')), false);
 }));
 
 test('malformed preexisting hooks.json aborts without changing config', () => withTempHome((home) => {
