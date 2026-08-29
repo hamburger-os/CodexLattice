@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { doctor, install, setMode, uninstall } from '../src/installer.js';
 import { HOOK_MARKER, managedHookLocations, parseHooksDocument } from '../src/hooks.js';
+import { sha256 } from '../src/roles.js';
 import { hooksDisabledCodexRunner, supportedCodexRunner } from './helpers.js';
 
 function withTempHome(fn) {
@@ -81,6 +82,41 @@ test('installed platform hook launcher runs from a CODEX_HOME containing spaces'
   assert.equal(output.continue, true);
   assert.equal(output.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
   assert.match(output.hookSpecificOutput.additionalContext, /root process is a coordinator/i);
+}));
+
+test('adaptive reinstall preserves original hooks-file ownership', () => withTempHome((home) => {
+  const first = install('adaptive', { home, runner: supportedCodexRunner });
+  assert.equal(first.receipt.hook.preexisting, false);
+
+  const second = install('adaptive', { home, runner: supportedCodexRunner });
+  assert.equal(second.receipt.hook.preexisting, false);
+
+  uninstall({ home, runner: supportedCodexRunner });
+  assert.equal(fs.existsSync(path.join(home, 'hooks.json')), false);
+}));
+
+test('adaptive reinstall retires an unchanged superseded runtime receipt', () => withTempHome((home) => {
+  const first = install('adaptive', { home, runner: supportedCodexRunner });
+  for (const entry of first.receipt.runtime.files) fs.rmSync(entry.file, { force: true });
+
+  const legacyDir = path.join(home, 'codex-lattice', 'runtime', 'legacy-test');
+  const legacyFile = path.join(legacyDir, 'legacy.js');
+  const legacyContent = 'export const legacy = true;\n';
+  fs.mkdirSync(legacyDir, { recursive: true });
+  fs.writeFileSync(legacyFile, legacyContent);
+
+  const receiptFile = path.join(home, 'codex-lattice', 'install.json');
+  const previous = JSON.parse(fs.readFileSync(receiptFile, 'utf8'));
+  previous.runtime = {
+    dir: legacyDir,
+    files: [{ filename: 'legacy.js', file: legacyFile, sha256: sha256(legacyContent), mode: 0o644 }]
+  };
+  fs.writeFileSync(receiptFile, `${JSON.stringify(previous, null, 2)}\n`);
+
+  const next = install('adaptive', { home, runner: supportedCodexRunner });
+  assert.equal(fs.existsSync(legacyFile), false);
+  assert.deepEqual(next.preservedSupersededRuntimeFiles, []);
+  assert.ok(next.receipt.runtime.files.every((entry) => fs.existsSync(entry.file)));
 }));
 
 test('adaptive install rejects hooks=false before touching user files', () => withTempHome((home) => {
