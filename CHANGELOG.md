@@ -4,23 +4,27 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 
 ## Unreleased
 
+## 0.2.6
+
 ### Added
 
-- bilingual English / Simplified Chinese project entry points;
-- CodexLattice visual identity assets and README banner;
-- contribution, security, code-of-conduct, issue, and pull-request guidance;
-- roadmap for release hardening and paired evaluation;
-- package repository/homepage/bug metadata;
-- Dependabot and CodeQL configuration;
-- stable `required / ci` branch-protection gate and npm package-manifest verification;
-- npm Trusted Publishing/OIDC release workflow with integrity-aware reruns, checksums, and GitHub Release assets;
-- OpenSSF Scorecard workflow with SARIF upload to GitHub code scanning;
-- release-process and Codex compatibility documentation.
+- bilingual English / Simplified Chinese project entry points and independent visual identity;
+- contribution, security, code-of-conduct, issue, pull-request, CODEOWNERS, and roadmap files;
+- Dependabot, CodeQL, and OpenSSF Scorecard automation;
+- stable `required / ci` branch-protection gate;
+- reproducible GitHub Release workflow with generated notes, installable tarball, and SHA256 checksums;
+- package-manifest verification and Codex compatibility/release documentation.
 
 ### Changed
 
-- README reorganized around quick start, native-role architecture, integrity guarantees, and explicit evidence boundaries;
-- GitHub Actions dependencies used by CI/security workflows are pinned to immutable commit SHAs.
+- GitHub Actions dependencies used by CI/security workflows are pinned to immutable commit SHAs;
+- package verification runs on Linux, macOS, and Windows with Node 24;
+- GitHub Releases are the canonical distribution channel; npm registry publication is deferred and no longer blocks releases.
+
+### Fixed
+
+- package verification now invokes npm through Node's `npm_execpath`, avoiding Windows `spawnSync npm.cmd EINVAL` failures on modern Node releases;
+- npm-normalized CLI `bin` metadata no longer triggers publish-time package correction warnings.
 
 ## 0.2.4
 

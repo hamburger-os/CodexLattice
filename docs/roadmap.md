@@ -1,6 +1,6 @@
 # CodexLattice Roadmap
 
-This roadmap separates presentation/community work from supply-chain hardening and outcome evaluation so cosmetic progress never outruns evidence.
+This roadmap separates presentation/community work from release hardening and outcome evaluation so cosmetic progress never outruns evidence.
 
 ## v0.2.5 — Presentation and community health
 
@@ -16,15 +16,15 @@ Goal: make the project understandable, trustworthy, and contributor-friendly wit
 
 ## v0.2.6 — Release and supply chain
 
-Goal: make releases reproducible and verifiable.
+Goal: make releases reproducible and verifiable without making registry publication a prerequisite.
 
-- publish the package through a documented release workflow;
-- prefer npm Trusted Publishing / OIDC over long-lived publish tokens;
-- publish npm provenance when supported by the release path;
-- produce GitHub Releases with generated notes and checksums;
-- verify the packed tarball in CI before release;
-- evaluate OpenSSF Scorecard findings and fix meaningful gaps;
-- document supported Codex versions and compatibility policy.
+- publish canonical GitHub Releases with generated notes and checksums;
+- verify the packed tarball in CI before release on Linux, macOS, and Windows;
+- install and execute the packed tarball before publishing release assets;
+- pin GitHub Actions dependencies to immutable commits;
+- run CodeQL and OpenSSF Scorecard;
+- document supported Codex versions and compatibility policy;
+- defer npm registry publishing until it provides enough distribution value to justify account-side setup.
 
 ## v0.3.0 — Evidence and calibration
 
@@ -44,4 +44,4 @@ The project should not publish fixed cost-saving or quality-improvement percenta
 
 ## Later
 
-Potential follow-up work includes compatibility canaries for newer Codex versions, richer policy signals, additional calibrated presets, and a dedicated documentation site if the documentation surface grows enough to justify it.
+Potential follow-up work includes optional npm Trusted Publishing, compatibility canaries for newer Codex versions, richer policy signals, additional calibrated presets, and a dedicated documentation site if the documentation surface grows enough to justify it.
