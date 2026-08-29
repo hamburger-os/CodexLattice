@@ -47,6 +47,27 @@ function completeHoldoutRows() {
   return rows;
 }
 
+function writeJson(file, value) {
+  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function writeJsonl(file, rows) {
+  fs.writeFileSync(file, `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`, 'utf8');
+}
+
+function runScript(script, args) {
+  return spawnSync(process.execPath, [path.join(repoRoot, 'scripts', script), ...args], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 10000
+  });
+}
+
+function combinedOutput(run) {
+  return `${run.stderr || ''}\n${run.stdout || ''}`;
+}
+
 test('study config freezes a balanced calibration/holdout split', () => {
   const summary = validateStudy(study, corpus, runners);
   assert.equal(summary.calibrationTasks, 4);
@@ -137,14 +158,91 @@ test('full-study runner refuses a non-empty output before any model execution', 
   try {
     const output = path.join(tempDir, 'runs.jsonl');
     fs.writeFileSync(output, '{}\n', 'utf8');
-    const run = spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'eval-run.mjs'), '--all', '--execute', '--out', output], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 10000
-    });
+    const run = runScript('eval-run.mjs', ['--all', '--execute', '--out', output]);
     assert.notEqual(run.status, 0);
-    assert.match(`${run.stderr}\n${run.stdout}`, /refusing full-study append/);
+    assert.match(combinedOutput(run), /refusing full-study append/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('blind grade application rejects duplicate blind IDs instead of overwriting a grade', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-lattice-grade-duplicate-'));
+  try {
+    const task = corpus.tasks.find((candidate) => study.splits.holdout.includes(candidate.id));
+    const row = result(task, study.promotion.candidate, 1);
+    const resultsFile = path.join(tempDir, 'runs.jsonl');
+    const keyFile = path.join(tempDir, 'key.json');
+    const gradesFile = path.join(tempDir, 'grades.json');
+    const outputFile = path.join(tempDir, 'graded.jsonl');
+    writeJsonl(resultsFile, [row]);
+    writeJson(keyFile, { schemaVersion: 'blind-key-1', studyVersion: study.version, entries: [{ blindId: 'blind-1', runId: row.runId, runnerId: row.runnerId, taskId: row.taskId, trial: row.trial }] });
+    writeJson(gradesFile, { schemaVersion: 'blind-grades-1', entries: [{ blindId: 'blind-1', score: 4 }, { blindId: 'blind-1', score: 2 }] });
+    const run = runScript('eval-apply-grades.mjs', [resultsFile, '--key', keyFile, '--grades', gradesFile, '--out', outputFile]);
+    assert.notEqual(run.status, 0);
+    assert.match(combinedOutput(run), /duplicate grade: blind-1/);
+    assert.equal(fs.existsSync(outputFile), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('blind grade application rejects ambiguous key mappings', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-lattice-grade-key-'));
+  try {
+    const task = corpus.tasks.find((candidate) => study.splits.holdout.includes(candidate.id));
+    const row = result(task, study.promotion.candidate, 1);
+    const resultsFile = path.join(tempDir, 'runs.jsonl');
+    const keyFile = path.join(tempDir, 'key.json');
+    const gradesFile = path.join(tempDir, 'grades.json');
+    const outputFile = path.join(tempDir, 'graded.jsonl');
+    writeJsonl(resultsFile, [row]);
+    writeJson(keyFile, { schemaVersion: 'blind-key-1', studyVersion: study.version, entries: [
+      { blindId: 'blind-1', runId: row.runId, runnerId: row.runnerId, taskId: row.taskId, trial: row.trial },
+      { blindId: 'blind-2', runId: row.runId, runnerId: row.runnerId, taskId: row.taskId, trial: row.trial }
+    ] });
+    writeJson(gradesFile, { schemaVersion: 'blind-grades-1', entries: [] });
+    const run = runScript('eval-apply-grades.mjs', [resultsFile, '--key', keyFile, '--grades', gradesFile, '--out', outputFile]);
+    assert.notEqual(run.status, 0);
+    assert.match(combinedOutput(run), /duplicate runId in key/);
+    assert.equal(fs.existsSync(outputFile), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('blind export refuses to overwrite an existing mapping key', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-lattice-blind-key-'));
+  try {
+    const task = corpus.tasks.find((candidate) => study.splits.holdout.includes(candidate.id));
+    const row = result(task, study.promotion.candidate, 1);
+    const resultsFile = path.join(tempDir, 'runs.jsonl');
+    const blindDir = path.join(tempDir, 'blind');
+    const keyFile = path.join(tempDir, 'mapping-key.json');
+    writeJsonl(resultsFile, [row]);
+    fs.writeFileSync(keyFile, 'existing-key\n', 'utf8');
+    const run = runScript('eval-blind.mjs', [resultsFile, '--out', blindDir, '--key', keyFile]);
+    assert.notEqual(run.status, 0);
+    assert.match(combinedOutput(run), /blind key already exists/);
+    assert.equal(fs.readFileSync(keyFile, 'utf8'), 'existing-key\n');
+    assert.equal(fs.existsSync(blindDir), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('public evidence export rejects a single but stale corpus version', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-lattice-publish-stale-'));
+  try {
+    const task = corpus.tasks.find((candidate) => study.splits.holdout.includes(candidate.id));
+    const row = { ...result(task, study.promotion.candidate, 1), corpusVersion: 'stale-corpus' };
+    const resultsFile = path.join(tempDir, 'runs.jsonl');
+    const outputFile = path.join(tempDir, 'evidence.json');
+    writeJsonl(resultsFile, [row]);
+    const run = runScript('eval-publish.mjs', [resultsFile, '--out', outputFile]);
+    assert.notEqual(run.status, 0);
+    assert.match(combinedOutput(run), /public evidence corpus version must match current corpus version/);
+    assert.equal(fs.existsSync(outputFile), false);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
