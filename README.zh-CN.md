@@ -17,88 +17,90 @@
 
 **面向 Codex 的质量优先推理资源编排器，使用 GPT-5.6 Sol、Terra 与 Luna。**
 
-CodexLattice 根据任务和生命周期阶段，在规划、探索、执行和验证之间选择原生 Codex agent role。它首先尽量留在“接近最优质量”的区域内，再在满足质量约束的候选路线中选择成本更低、延迟更小的路线。质量是约束，成本只是次级排序因素。
+CodexLattice 为规划、探索、执行和验证选择原生 Codex agent role。它先保留预测质量接近最优的候选集合，再在其中优先选择成本更低、延迟更小的路线。质量是约束，成本是次级排序因素。
 
-> **当前版本：v0.2.7。** 安装与运行采用 fail-closed 策略：CodexLattice 会校验真实 Codex CLI、安装按路线固定模型/推理强度的原生角色、记录配置哈希，并在验证状态发生漂移时拒绝运行。
+> **v0.3.0：** adaptive 模式改为透明生效。安装后，Codex 的普通 root turn 会通过 `UserPromptSubmit` hook 自动进入路由。`codex-lattice run` 仍保留给 CI / 调试 / 显式执行，但不再是普通聊天入口。
 
 ## 快速开始
 
-前置要求：**Node.js >= 20**、**Codex CLI >= 0.149.0**。CodexLattice v0.2.7 已针对 Codex 0.149.1 做跨平台集成验证。
+前置要求：**Node.js >= 20**、**Codex CLI >= 0.149.0**。发布矩阵针对 Codex 0.149.1 做真实安装验证。
 
 ```bash
 npm install -g @openai/codex
 npm install -g https://github.com/hamburger-os/CodexLattice.git
 
-codex-lattice install adaptive
+codex-lattice install
 codex-lattice doctor --strict
-codex-lattice run "refactor authentication across three modules"
+
+# 之后正常使用 Codex 即可。
+codex
 ```
 
-CodexLattice 不会静默安装或替换 Codex，也不会修改 Codex 的 sandbox / approval 设置。
-
-## 它实际改变了什么
-
-CodexLattice 不依赖 prompt 在 `spawn_agent` 时临时覆盖 `model` / `reasoning_effort`，而是安装原生、路线专用的角色，例如：
+从此直接输入普通任务：
 
 ```text
-lattice_plan_sol_high
-lattice_explore_luna_low
-lattice_execute_terra_medium
-lattice_verify_sol_max
+重构三个模块里的 authentication 逻辑
 ```
 
-每个角色在自己的 Codex 配置文件中固定模型和推理强度；运行时选择准确的 `agent_type`。
+不再需要 `codex-lattice run`、slash command、手工选择模型，也不需要针对每个项目额外配置路由。首次执行用户级 Hook 时，Codex 可能要求做一次 **Hook review / trust**；CodexLattice 不会替用户绕过这一步。
+
+## 透明编排架构
+
+Adaptive 安装会在用户的 `CODEX_HOME` 下管理三类资产：
+
+- 路线专用的 native agent role，例如 `lattice_execute_terra_medium`、`lattice_verify_sol_max`；
+- `hooks.json` 中一个带唯一 marker 的 `UserPromptSubmit` handler，与用户已有 Hook 合并而不是覆盖；
+- `CODEX_HOME/codex-lattice/runtime/<version>/` 下的版本化、自包含 Hook runtime。
 
 ```text
-                    USER TASK
-                       │
-                       ▼
-                ┌─────────────┐
-                │ Task signals │
-                └──────┬──────┘
-                       │
-                       ▼
-                ┌──────────────┐
-                │ Route policy │
-                └──────┬───────┘
-                       │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-      Luna           Terra            Sol
-      轻量             平衡             深度
-        │              │              │
-        └──────────────┼──────────────┘
-                       ▼
-        PLAN → EXPLORE → EXECUTE → VERIFY
-                       │
-                       ▼
-              Native Codex agents
+普通用户 Prompt
+      │
+      ▼
+UserPromptSubmit Hook
+      │
+      ▼
+ buildPlan(task)
+      │
+      ▼
+派生的路由元数据
+      │
+      ▼
+ Root Coordinator
+      │
+      ├── PLAN
+      ├── EXPLORE
+      ├── EXECUTE
+      └── VERIFY
+           │
+           ▼
+    Native Codex Roles
+    Luna / Terra / Sol
 ```
 
-## 为什么需要它
+JavaScript policy 仍然是路由权威。Hook 注入 developer context 的只有**派生路由元数据与 coordinator 规则**，不会把原始用户 prompt 复制到 developer context。对于需要仓库、工具、代码修改或测试的任务，root 被要求协调精确选中的 route-specific agent，而不是自己重新猜模型。
 
-固定配方，例如“Sol 规划、Terra 编码、Sol 审查”，可能在简单任务上浪费强模型调用，同时在真正高风险任务上仍然投入不足。CodexLattice 使用阶段感知策略：
+Subagent 的 `UserPromptSubmit` turn 会被直接忽略，避免 Lattice 递归路由。Hook 自身发生异常时也采用 fail-open：普通 Codex 仍然可以继续工作。
 
-- **Plan：** 普通任务优先 Terra；高歧义、架构变化或高风险时升级到 Sol。
-- **Explore：** 默认 Luna；只对相互独立的仓库问题做有界并行探索。
-- **Execute：** 当预测质量仍接近上限时使用 Luna/Terra；有证据再升级。
-- **Verify：** 先运行确定性检查；高风险、分歧或验证不完整时使用更强审查路线。
-- **Critical ceiling：** 最大推理强度只用于关键规划/验证路径。
-- **Fallback：** `single` 模式只移除 CodexLattice 管理的编排配置，将控制权交还用户原本的 Codex 配置。
+## 路由目标
 
-## 优化目标
+对每个阶段与候选路线 `r`：
 
-对于候选路线 `r`：
-
-1. 估计任务与阶段条件下的质量 `Q(r | task, stage)`；
+1. 估计任务条件下的质量 `Q(r | task, stage)`；
 2. 找到预测质量上限 `Q*`；
 3. 保留 `Q(r) >= Q* - δ` 的路线；
-4. 在这些路线中先最小化名义成本，再最小化延迟；
+4. 在集合内先最小化名义成本，再最小化延迟；
 5. 高风险任务令 `δ = 0`。
 
-这是词典序优化：不会通过一个“成本权重”主动交换掉质量。当前质量模型刻意保持简单、可检查；`cost` 是排序指数，**不是账单估算器**。
+当前 quality 值是透明的 seed heuristic，不是校准后的概率；`cost` 是排序指数，不是账单估算器。
 
-## 运行前先看路由
+典型策略：
+
+- **Plan：** 普通任务优先 Terra；高歧义、架构变化或更高风险时使用 Sol。
+- **Explore：** 默认 Luna；只对相互独立的问题做有界并行。
+- **Execute：** 当预测质量仍接近上限时使用 Luna/Terra；有证据再升级。
+- **Verify：** 确定性检查优先；高风险或验证不完整时使用更强的独立审查。
+
+## 查看路由但不执行任务
 
 ```bash
 codex-lattice explain "refactor authentication across three modules"
@@ -106,102 +108,78 @@ codex-lattice explain --trace "refactor authentication across three modules"
 codex-lattice shadow "refactor authentication across three modules"
 ```
 
-`explain` 展示生命周期各阶段的选择；`--trace` 展示完整候选集和淘汰原因；`shadow` 给出相对于 Sol-medium 单 agent 参考路线的反事实视图，但不会伪装成已测量的节省结论。
-
-## 安装完整性
-
-`codex-lattice install adaptive` 是一个安装事务，而不是简单写几行 TOML。它会：
-
-1. 校验受支持的 `codex` 可执行文件；
-2. 校验运行所需的 model/config override surface；
-3. 备份已有 Codex 配置；
-4. 保留用户无关的自定义 agent role；
-5. 写入路线专用 native role 文件；
-6. 在清晰边界的 managed block 中注册这些角色；
-7. 让已安装的 Codex CLI 自己解析当前 `CODEX_HOME`；
-8. 确认至少一个有效 multi-agent backend 已启用；
-9. 把配置和 role 哈希写入安装 receipt；
-10. 原生验证失败时自动回滚。
-
-随时检查：
+如需 CI / 调试中的显式执行，兼容入口仍然存在：
 
 ```bash
-codex-lattice doctor --strict
+codex-lattice run "refactor authentication across three modules"
 ```
 
-如果安装 receipt 缺失/过期、managed block 被改动、role 文件被修改，或 Codex CLI 版本与验证时不同，`run` 会拒绝继续。
+该子进程会带上 bypass 标记，因此透明 Hook 不会把同一个任务再次路由。
+
+## 事务化安装
+
+`codex-lattice install` 会校验 Codex、保留无关的配置/role/Hook、安装路线角色与版本化 Hook runtime、合并 managed Hook、让 Codex 自己解析结果、检查 multi-agent / hooks / model catalog 信号，并把所有受管理资产的哈希写入 receipt。
+
+如果验证失败，受管理修改会自动回滚。`doctor --strict` 会检查 managed config block、role hash、Hook handler、runtime hash、Codex 版本、multi-agent backend、hooks feature 与本地模型目录。
+
+CodexLattice 不会替用户写入 Codex 的 Hook trust state。
 
 ## 模式切换与卸载
 
 ```bash
-# 暂停 CodexLattice 编排，但保留用户原本配置
+# 关闭透明路由，恢复用户原本的 Codex 行为
 codex-lattice mode single
 
-# 重新启用并重新验证
+# 重新启用透明 adaptive 编排
 codex-lattice mode adaptive
 
-# 只移除 CodexLattice 管理的配置、角色文件和 receipt
+# 只删除 CodexLattice 拥有的配置、Hook、role、runtime 与 receipt
 codex-lattice uninstall
 ```
 
-## Codex App 兼容性
+用户自己的 `hooks.json` handler 会被保留。Runtime 文件只有在 receipt hash 仍能证明所有权时才会被删除；若文件被改过，会保留而不是猜测性删除。
 
-CodexLattice 将 CLI 支持、共享 Codex 配置兼容性、桌面 App 原生 UI 编排视为三种不同的证据层级。受管理的 role/config 以可与读取同一 Codex 配置面的客户端共存为目标，因此 **Codex App 的共享配置兼容是明确适配目标**。
+## Codex App
 
-但 CLI smoke 通过并不能证明“从 Codex App UI 发起任意任务时一定自动进入 `codex-lattice run`”。目前不声称原生 App UI 编排已被验证。支持边界和桌面端人工验收清单见 [`docs/codex-app.md`](docs/codex-app.md)。
+v0.3 针对 Codex CLI 与 Codex App 共享的用户级 Hook / config 层设计，因此桌面端的目标体验同样是：**打开 App，正常聊天即可。**
+
+当前上游边界会明确记录：
+
+- 用户级 Hook 可能需要 Codex 的一次性 review；
+- Desktop 可能产生内部 non-resumable turn，因此默认跳过 `transcript_path` 明确为 `null` 的 turn；设置 `CODEX_LATTICE_ROUTE_EPHEMERAL=1` 可主动纳入；
+- 当前 `UserPromptSubmit` classifier payload 不包含图片附件内容，所以多模态任务只能根据文字部分进行路由；
+- 自动化 CI 能验证真实 Codex CLI 与共享配置，但完整 Desktop UI 验收仍属于单独的兼容性检查。
+
+详见 [`docs/codex-app.md`](docs/codex-app.md)。
 
 ## 本地遥测（默认关闭）
 
-Telemetry 默认关闭并且仅保存在本地。CodexLattice telemetry 不会写入原始任务文本。
+Telemetry 默认关闭，仅保存在本地，而且不会写入原始任务文本。
 
 ```bash
 codex-lattice telemetry on
 codex-lattice telemetry status
 codex-lattice telemetry summarize
-
 codex-lattice feedback <run-id> pass
-codex-lattice feedback <run-id> mixed "tests pass but implementation is too invasive"
 ```
 
-评测与校准方法见 [`docs/evaluation.md`](docs/evaluation.md)。
+评测与校准协议见 [`docs/evaluation.md`](docs/evaluation.md)。
 
-## 当前证据边界
+## 证据边界
 
-当前仓库对“安装与配置确实生效”的证明强于“路由一定提升最终任务效果”，同时已经把收集结果证据所需的方法学约束做成可执行的 fail-closed 机制，避免用不完整结果直接推动默认策略。
+CI 在 Linux、macOS、Windows 上执行单元与配置测试。真实 Codex smoke matrix 会安装 `@openai/codex@0.149.1`、全局安装 CodexLattice、验证临时 `CODEX_HOME`、确认 multi-agent 与 hooks backend 以及 GPT-5.6 route slug、执行 `adaptive → single → adaptive`，并确认卸载后恢复基线。
 
-阻塞式 CI 在 Linux、macOS、Windows 上运行单元/配置测试；真实 Codex smoke matrix 会安装 `@openai/codex@0.149.1`、全局安装 CodexLattice、创建临时 `CODEX_HOME`、要求 `doctor --strict` 通过、验证有效 multi-agent backend 与 GPT-5.6 路线 slug，执行 `single → adaptive`，并证明卸载后基线配置被恢复。另有每周/手动 `@openai/codex@latest` canary 执行同类结构性 smoke；它只是提前发现兼容性变化的信号，不是发布保证。
-
-源码仓库还包含固定版本的 paired-study contract：校准/holdout 切分、可复现 seeded runner 顺序、盲评工具、pass rate 的 Wilson 95% 区间、脱敏 evidence export，以及只使用 holdout 的 fail-closed promotion gate。当前 gate 要求人类评分完整覆盖，并要求可信的实测 reasoning-token 覆盖；缺失 usage 不会用 heuristic cost index 填补。这些研究命令面向源码 checkout，不是安装后运行时的必需组成部分。
-
-目前**不会声称**：
-
-- heuristic quality 是校准后的概率；
-- 多个廉价 agent 必然等价于一个更强模型；
-- 固定百分比的成本节省或速度提升；
-- 本地 model catalog 可见就代表账户一定拥有模型权限；
-- CI 已进行认证/付费模型调用；
-- Codex App 原生 UI 已被证明会把任意任务自动路由到 CodexLattice。
-
-剩余证据里程碑是：针对冻结的 study 做认证重复试验、独立完成盲评、采集可信的实测效率数据、通过 holdout promotion gate，并在任何路由校准结论之前发布脱敏且版本化的证据集。详见 [`docs/evaluation.md`](docs/evaluation.md)、[`docs/roadmap.md`](docs/roadmap.md) 和 [Issue #1](https://github.com/hamburger-os/CodexLattice/issues/1)。
+项目**不会声称** heuristic quality 已经校准为概率、多个廉价 agent 必然等价于一个强模型、固定百分比的成本/速度收益、model catalog 可见就等于账户 entitlement、CI 已执行付费模型调用，或 CLI smoke 等价于对所有 Codex App UI 版本的完整验证。
 
 ## 文档
 
 - [安装说明](docs/installation.md)
 - [架构](docs/architecture.md)
 - [Codex 兼容性](docs/compatibility.md)
-- [Codex App 兼容边界](docs/codex-app.md)
-- [评测与校准协议](docs/evaluation.md)
-- [研究笔记](docs/research-notes.md)
+- [Codex App 兼容性](docs/codex-app.md)
+- [评测与校准](docs/evaluation.md)
 - [路线图](docs/roadmap.md)
-- [贡献指南](CONTRIBUTING.md)
-- [安全策略](SECURITY.md)
 - [变更日志](CHANGELOG.md)
-
-## 参与贡献
-
-欢迎提交 bug、Codex 兼容性报告、路由策略建议、benchmark task 和聚焦的 Pull Request。提交前请阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
-
-兼容性问题请附上操作系统、Node 版本、Codex 版本、CodexLattice 版本以及经过脱敏的 `doctor --strict` 输出。Codex App 相关问题还应附上 App 版本，并注明问题属于共享配置还是 App 特有的 UI/runtime 流程。请勿发布 token、凭据或私人任务内容。
 
 ## License
 
