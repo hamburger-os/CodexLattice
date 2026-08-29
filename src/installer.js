@@ -11,7 +11,7 @@ import {
   sha256
 } from './roles.js';
 
-export const PACKAGE_VERSION = '0.2.2';
+export const PACKAGE_VERSION = '0.2.3';
 export const START = '# >>> CodexLattice managed block >>>';
 export const END = '# <<< CodexLattice managed block <<<' ;
 

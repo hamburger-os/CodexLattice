@@ -4,7 +4,7 @@
 
 CodexLattice is a Codex-native reasoning-resource scheduler. It tries to preserve the best attainable result, then spend as little as possible *without leaving the near-optimal quality region*.
 
-> **v0.2.2 hardens installation and runtime enforcement.** Installation is now fail-closed: CodexLattice probes the real Codex CLI, writes route-specific native agent roles, asks Codex to parse the resulting configuration, writes a validated installation receipt, and rolls back automatically if validation fails. `run` refuses to start if that validated installation has drifted.
+> **v0.2.3 hardens installation and runtime enforcement.** Installation is now fail-closed: CodexLattice probes the real Codex CLI, writes route-specific native agent roles, asks Codex to parse the resulting configuration, writes a validated installation receipt, and rolls back automatically if validation fails. `run` refuses to start if that validated installation has drifted.
 
 ## Why
 
@@ -31,7 +31,7 @@ This is lexicographic optimization: quality is not traded away by a cost weight.
 
 ## Prerequisite
 
-CodexLattice v0.2.2 requires **Codex CLI >= 0.149.0** and is integration-tested against **0.149.1**.
+CodexLattice v0.2.3 requires **Codex CLI >= 0.149.0** and is integration-tested against **0.149.1**.
 
 Install/update Codex using one of the official distribution paths:
 
@@ -197,7 +197,7 @@ CodexLattice owns only role names prefixed with `lattice_` inside its managed bl
 - An explicit `[agents] enabled = false` (or explicit multi-agent disable) is respected: adaptive installation stops instead of silently overriding the user's choice.
 - `single` mode is passthrough: it removes only the CodexLattice managed block and route files.
 
-## What v0.2.2 intentionally does not claim
+## What v0.2.3 intentionally does not claim
 
 - Heuristic quality values are not calibrated probabilities yet.
 - Multiple cheaper agents are not assumed to equal one stronger model.
