@@ -1,5 +1,5 @@
 import { buildPlan } from './policy.js';
-import { transparentOrchestrationContext } from './runtime.js';
+import { transparentOrchestrationContext } from './coordinator.js';
 
 const USER_PROMPT_EVENT = 'UserPromptSubmit';
 
