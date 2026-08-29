@@ -7,10 +7,14 @@
     "codex-lattice": "bin/codex-lattice.js"
   },
   "scripts": {
-    "test": "node --test test/agents.test.js test/codex.test.js test/installer.test.js test/policy.test.js test/runtime.test.js test/telemetry.test.js",
-    "check": "node --check bin/codex-lattice.js && node --check src/policy.js && node --check src/installer.js && node --check src/telemetry.js && node --check src/runtime.js && node --check src/roles.js && node --check src/codex.js && node --check scripts/verify-package.mjs",
+    "test": "node --test test/agents.test.js test/codex.test.js test/evaluation.test.js test/installer.test.js test/policy.test.js test/runtime.test.js test/telemetry.test.js",
+    "check": "node --check bin/codex-lattice.js && node --check src/policy.js && node --check src/installer.js && node --check src/telemetry.js && node --check src/runtime.js && node --check src/roles.js && node --check src/codex.js && node --check scripts/verify-package.mjs && node --check scripts/eval-lib.mjs && node --check scripts/eval-validate.mjs && node --check scripts/eval-run.mjs && node --check scripts/eval-summarize.mjs",
     "test:codex-smoke": "node test/integration/codex-install-smoke.js",
-    "verify:package": "node scripts/verify-package.mjs"
+    "verify:package": "node scripts/verify-package.mjs",
+    "eval:validate": "node scripts/eval-validate.mjs",
+    "eval:plan": "node scripts/eval-run.mjs",
+    "eval:run": "node scripts/eval-run.mjs",
+    "eval:summarize": "node scripts/eval-summarize.mjs"
   },
   "engines": {
     "node": ">=20"

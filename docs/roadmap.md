@@ -30,17 +30,28 @@ Goal: make releases reproducible and verifiable without making registry publicat
 
 Goal: measure whether routing preserves quality while reducing unnecessary reasoning spend.
 
-Planned evaluation dimensions:
+### Evaluation infrastructure implemented
 
-- task buckets: easy, medium, hard, critical;
-- baselines: CodexLattice, Sol-medium single-agent, Sol-high single-agent, Terra-medium single-agent;
-- outcome quality and test pass rate;
-- human preference / rubric score where deterministic evaluation is insufficient;
-- model calls, routing decisions, escalation count, latency, and usage/cost proxies;
-- repeated trials where stochasticity matters;
-- versioned machine-readable results.
+- versioned, self-contained seed corpus with easy/medium/hard/critical buckets;
+- fixed paired runner definitions for adaptive, Sol-medium, Sol-high, and Terra-medium;
+- isolated fresh workspaces for every trial;
+- protected deterministic evaluator files restored before grading;
+- explicit plan-only default so CI cannot accidentally make paid model calls;
+- machine-readable result schema with nullable usage instead of estimated/fabricated spend;
+- result summarizer with pass-rate, duration, human-score, and usage-coverage reporting;
+- CI contract that validates corpus integrity and execution planning without model calls.
 
-The project should not publish fixed cost-saving or quality-improvement percentages until this evaluation exists and is reproducible.
+### Evidence still required before v0.3 claims
+
+- authenticated repeated trials across the full corpus;
+- randomized paired execution order;
+- blind human grading where deterministic tests are insufficient;
+- versioned sanitized result publication;
+- calibration/holdout split before tuning route thresholds;
+- holdout comparison against stronger baselines after calibration;
+- explicit reporting of missing data and usage coverage.
+
+The project will not publish fixed cost-saving, speedup, or quality-improvement percentages until this measured evaluation exists and is reproducible.
 
 ## Later
 
