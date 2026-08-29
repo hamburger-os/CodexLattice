@@ -4,6 +4,7 @@ import path from 'node:path';
 
 export const MIN_CODEX_VERSION = '0.149.0';
 export const TESTED_CODEX_VERSION = '0.149.1';
+const LATTICE_HOOK_MARKER = '--codex-lattice-hook-v1';
 
 function versionTuple(version) {
   const match = String(version || '').match(/(?:^|\s|v)(\d+)\.(\d+)\.(\d+)(?:\D|$)/);
@@ -81,8 +82,8 @@ export function resolveCodexInvocation() {
   return { command: 'codex', prefixArgs: [], source: 'path' };
 }
 
-export function runCodex(args, { home, cwd = process.cwd(), stdio = 'pipe' } = {}) {
-  const env = { ...process.env };
+export function runCodex(args, { home, cwd = process.cwd(), stdio = 'pipe', env: extraEnv = {} } = {}) {
+  const env = { ...process.env, ...extraEnv };
   if (home) env.CODEX_HOME = home;
   let invocation;
   try {
@@ -106,6 +107,17 @@ function resultText(result) {
 function runnerFailure(result) {
   if (result?.error) return result.error.message;
   return resultText(result) || `exit ${result?.status ?? 'unknown'}`;
+}
+
+function transparentHookInstalled(home) {
+  if (!home) return false;
+  const file = path.join(home, 'hooks.json');
+  if (!fs.existsSync(file)) return false;
+  try {
+    return fs.readFileSync(file, 'utf8').includes(LATTICE_HOOK_MARKER);
+  } catch {
+    return false;
+  }
 }
 
 export function probeCodex({ home, runner = runCodex, checkConfig = true, checkModels = true } = {}) {
@@ -132,7 +144,7 @@ export function probeCodex({ home, runner = runCodex, checkConfig = true, checkM
   const execHelpText = resultText(execHelp);
   const execFlagsOk = execHelp?.status === 0 && /--model\b/.test(execHelpText) && /(?:^|\s)-c\b|--config\b/m.test(execHelpText);
   checks.push({ name: 'exec_runtime_overrides', ok: execFlagsOk, detail: execFlagsOk ? '--model and config override are available' : runnerFailure(execHelp) });
-  if (!execFlagsOk) errors.push('This Codex CLI does not expose the runtime --model/config override surface required by CodexLattice.');
+  if (!execFlagsOk) errors.push('This Codex CLI does not expose the runtime --model/config override surface required by the explicit CodexLattice run command.');
 
   let featuresText = null;
   if (checkConfig && errors.length === 0) {
@@ -158,6 +170,24 @@ export function probeCodex({ home, runner = runCodex, checkConfig = true, checkM
       });
       if (!multiAgentEnabled) {
         errors.push('Codex does not report an enabled multi-agent backend; adaptive orchestration cannot be guaranteed to work.');
+      }
+
+      const requiresHooks = transparentHookInstalled(home);
+      if (featureStates.has('hooks')) {
+        const hooksEnabled = featureStates.get('hooks') === true;
+        checks.push({ name: 'hooks_backend', ok: hooksEnabled, detail: `hooks=${hooksEnabled}` });
+        if (!hooksEnabled && requiresHooks) {
+          errors.push('Codex reports hooks=false while the CodexLattice transparent hook is installed; ordinary prompt routing cannot work.');
+        } else if (!hooksEnabled) {
+          warnings.push('Codex reports hooks=false; transparent prompt routing is unavailable in the current configuration.');
+        }
+      } else {
+        checks.push({ name: 'hooks_backend', ok: null, detail: 'hooks feature key was not reported by this Codex build' });
+        if (requiresHooks) {
+          errors.push('Could not verify an enabled hooks backend while the CodexLattice transparent hook is installed.');
+        } else {
+          warnings.push('Could not verify the hooks feature from `codex features list`.');
+        }
       }
     }
   }

@@ -8,49 +8,75 @@ CodexLattice treats installation as a compatibility transaction, not as text ins
 - Codex CLI >= 0.149.0
 - integration baseline: Codex CLI 0.149.1
 
-The baseline is versioned because Codex's multi-agent schema and tool exposure are evolving. A future Codex release may require the compatibility floor to move.
+Codex 0.149.1 exposes both the stable `hooks` feature and native multi-agent support required by transparent adaptive mode.
 
 ## Adaptive install transaction
 
-`codex-lattice install adaptive` performs these steps in order:
+`codex-lattice install` defaults to `adaptive` and performs these steps:
 
-1. Probe `codex --version` before modifying files.
-2. Reject unsupported Codex versions before modifying files.
-3. Probe `codex exec --help` for the root runtime override surface.
-4. Parse the existing config sufficiently to reject CodexLattice namespace collisions, inline-agent ambiguity, or an explicit multi-agent disable.
-5. Snapshot the existing config, prior CodexLattice role files, and installation receipt.
-6. Persist a timestamped user-config backup when a config already exists.
-7. Atomically write all route-specific role files.
-8. Atomically write the managed registration block into `config.toml`.
-9. Execute `codex features list` with the target `CODEX_HOME`. A non-zero result is a failed install.
-10. Require at least one enabled native multi-agent backend reported by Codex (`multi_agent` or `multi_agent_v2`). If none is enabled, fail and roll back.
-11. Probe the bundled model catalog when supported; inability to prove model catalog visibility is a warning rather than a structural failure.
-12. Write an installation receipt containing config/role hashes and the validated Codex version.
-13. On any failure after mutation begins, restore the snapshot and remove the failed-install backup.
+1. probe `codex --version` before modifying files;
+2. reject unsupported Codex versions;
+3. probe `codex exec --help` for the explicit `codex-lattice run` compatibility path;
+4. inspect the existing Codex config and reject unsafe namespace collisions, explicit multi-agent disable, or explicit `hooks = false`;
+5. parse any existing `hooks.json` before mutation and reject malformed structures rather than guessing;
+6. snapshot the managed config, hook file, route files, runtime files, and receipt;
+7. create timestamped backups of pre-existing `config.toml` and `hooks.json`;
+8. atomically write route-specific native agent role files;
+9. atomically install a versioned self-contained hook runtime under `CODEX_HOME/codex-lattice/runtime/<version>/`;
+10. merge exactly one marker-owned `UserPromptSubmit` command handler into `hooks.json`, preserving unrelated user hooks;
+11. atomically write the managed agent registration block into `config.toml`;
+12. execute `codex features list` with the target `CODEX_HOME` and require the active configuration to parse;
+13. require an enabled native multi-agent backend and inspect the stable `hooks` feature signal;
+14. probe the bundled model catalog when supported;
+15. write a schema-v2 receipt containing config, role, hook, and runtime integrity metadata;
+16. on any failure after mutation begins, restore the snapshot and remove failed-install backups.
 
-## Why route-specific roles are the compatibility backend
+## Why a self-contained hook runtime
 
-The Codex `spawn_agent` model/reasoning override fields are not unconditionally exposed by current multi-agent tool variants. Route-specific role configs avoid that dependency:
+Codex App and Codex CLI do not need to resolve the globally installed npm package at hook-execution time. Installation copies only the routing runtime sources needed by the hook into the active Codex home and writes platform launchers that pin the Node executable used during installation.
 
-- the root config declares `agents.lattice_<stage>_<tier>_<effort>`;
-- each declared role points at a role config file under `CODEX_HOME/agents`;
-- that role config pins `model` and `model_reasoning_effort`;
-- the parent only needs to choose the correct `agent_type`.
+This gives the hook a stable, versioned execution target and also makes upgrades naturally change the hook command path. Because Codex owns user-hook trust, an upgraded handler can be reviewed again when Codex decides that is necessary.
 
-This is intentionally more verbose on disk than four generic roles, but the runtime contract is stronger and easier to audit.
+The runtime contains no credentials or task history. Its generated files are hashed in the receipt.
 
-## Run-time gate
+## Hook ownership and coexistence
 
-`codex-lattice run` refuses to invoke Codex unless:
+CodexLattice identifies its handler with a stable command marker. It never replaces the entire `hooks.json` document.
 
-- adaptive managed config is present;
-- a validated adaptive receipt is present;
-- the managed block hash matches the receipt;
-- every generated route file matches the expected content hash;
-- the current Codex version exactly matches the version recorded in the validated receipt (a Codex upgrade/downgrade requires revalidation).
+- unrelated events, matcher groups, and handlers are preserved;
+- reinstall replaces the existing CodexLattice handler instead of duplicating it;
+- `mode single` removes only the CodexLattice handler and owned runtime;
+- uninstall preserves a pre-existing `hooks.json` file even when all CodexLattice entries are gone;
+- runtime files are deleted only when their actual hash matches the receipt hash.
 
-Use `codex-lattice doctor --strict` for the deeper native probe.
+Malformed or ambiguous ownership states are rejected fail-closed.
+
+## Hook trust
+
+Codex requires review/trust for non-managed user hooks. CodexLattice installs the handler but **does not write Codex's trust state or trusted hash**. The expected user experience is one Codex review when the hook is first encountered, after which normal chats require no CodexLattice-specific command.
+
+## Why route-specific roles are the execution backend
+
+The transparent hook can inject routing context but does not dynamically replace the root turn's model. Therefore the root becomes a coordinator and substantive repository/tool work is delegated to native route-specific roles:
+
+- root config declares `agents.lattice_<stage>_<tier>_<effort>`;
+- each role points at a file under `CODEX_HOME/agents`;
+- each role config pins `model` and `model_reasoning_effort`;
+- the coordinator selects the exact `agent_type` from the deterministic route plan without passing model/effort overrides.
+
+## Integrity gates
+
+`codex-lattice doctor --strict` verifies:
+
+- the managed adaptive config block and receipt hash;
+- every route-specific role file;
+- exactly one CodexLattice `UserPromptSubmit` handler with the receipt-recorded handler body;
+- every self-contained runtime file hash;
+- the currently installed Codex version;
+- native config parsing, multi-agent backend, hooks feature signal, and model-catalog signal.
+
+The explicit `codex-lattice run` command still has its original fail-closed preflight and sets `CODEX_LATTICE_BYPASS_HOOK=1` on its child Codex process so the task is not routed twice.
 
 ## Proof boundary
 
-The installer proves structural compatibility with the local Codex executable. It cannot prove that a user's account is entitled to every configured model without making authenticated model calls. CodexLattice surfaces that as a separate model-availability concern rather than conflating it with installation correctness.
+The installer proves structural compatibility with the local Codex executable and the generated user configuration. It cannot prove account entitlement to every configured model without authenticated model calls, and CLI CI does not substitute for acceptance testing every desktop App release.

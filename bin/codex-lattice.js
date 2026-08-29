@@ -22,7 +22,7 @@ import {
 const [cmd, ...args] = process.argv.slice(2);
 
 function help() {
-  console.log(`CodexLattice ${PACKAGE_VERSION}\n\nCommands:\n  install [adaptive|single]\n  mode <adaptive|single>\n  explain [--trace] <task>\n  shadow <task>\n  run <task>\n  telemetry <on|off|status|summarize> [jsonl-path]\n  feedback <run-id> <pass|fail|mixed> [note]\n  doctor [--strict]\n  uninstall\n  version\n`);
+  console.log(`CodexLattice ${PACKAGE_VERSION}\n\nCommands:\n  install [adaptive|single]\n  mode <adaptive|single>\n  explain [--trace] <task>\n  shadow <task>\n  run <task>                 Advanced/CI explicit execution\n  telemetry <on|off|status|summarize> [jsonl-path]\n  feedback <run-id> <pass|fail|mixed> [note]\n  doctor [--strict]\n  uninstall\n  version\n\nAdaptive mode routes ordinary Codex CLI/App chats automatically after installation and one-time Codex hook review.\n`);
 }
 
 function compactRoute(route) {
@@ -87,7 +87,7 @@ try {
     }
     const written = appendTelemetry('feedback', { runId, label, note: noteParts.join(' ') || undefined });
     if (!written) throw new Error('telemetry is off; enable it with `codex-lattice telemetry on` before recording feedback');
-    console.log(JSON.stringify({ recorded: true, runId, label }, null, 2));
+    console.log(JSON.stringify({ recorded: true, runId, label, note: noteParts.join(' ') || undefined }, null, 2));
     process.exit(0);
   }
 
@@ -112,7 +112,10 @@ try {
       executeRoute: compactRoute(plan.stages.execute),
       verifyRoute: compactRoute(plan.stages.verify)
     });
-    const result = runCodex(buildCodexExecArgs(task, plan), { stdio: 'inherit' });
+    const result = runCodex(buildCodexExecArgs(task, plan), {
+      stdio: 'inherit',
+      env: { CODEX_LATTICE_BYPASS_HOOK: '1' }
+    });
     appendTelemetry('run_finished', {
       runId,
       exitCode: result.status ?? 1,

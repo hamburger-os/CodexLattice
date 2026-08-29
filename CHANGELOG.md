@@ -4,32 +4,62 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 
 ## Unreleased
 
-### Added
+## 0.3.0
 
-- versioned paired-evaluation seed corpus with two deterministic tasks in each easy/medium/hard/critical bucket;
-- safe plan-only-by-default evaluation runner for adaptive, Sol-medium, Sol-high, and Terra-medium baselines;
-- protected evaluator-file restoration so benchmark runners cannot pass by weakening tests;
-- machine-readable result schema, ignored raw artifact storage, and coverage-aware result summarization;
-- frozen calibration/holdout study contract with a reproducible seeded paired execution order;
-- Wilson 95% pass-rate intervals for evaluation summaries;
-- blind-grading bundle generation with a separately stored de-blinding key and validated grade merge workflow;
-- holdout-only fail-closed promotion gate that blocks incomplete evidence, quality regression, critical paired regression, and insufficient measured efficiency improvement;
-- sanitized public-evidence exporter that omits raw artifact paths, execution-error text, route traces, and reviewer notes;
-- CI evaluation contract that validates corpus, runner, study, and full seeded planning without authenticated or paid model calls;
-- weekly/manual cross-platform `@openai/codex@latest` structural compatibility canary.
+### Transparent orchestration
+
+- route ordinary Codex root prompts through a user-level `UserPromptSubmit` hook so adaptive mode no longer requires `codex-lattice run` for normal CLI/App chats;
+- keep the deterministic JavaScript `buildPlan()` policy as the routing authority before model execution;
+- inject only derived route metadata and coordinator rules, never a copy of the raw user prompt, into developer context;
+- treat the root Codex process as a coordinator for substantive repository/tool work and delegate to exact route-specific native roles;
+- ignore subagent prompt hooks to prevent recursive Lattice orchestration;
+- fail open on hook/runtime errors and skip explicit-null-transcript internal/non-resumable turns by default;
+- retain `codex-lattice run` as an advanced/CI path and mark its child process to bypass transparent re-entry;
+- preserve native Codex collaboration-mode, sandbox, and approval restrictions instead of inferring Plan mode from hook approval metadata.
+
+### Installation and compatibility
+
+- add a versioned self-contained hook runtime under `CODEX_HOME/codex-lattice/runtime/<version>` with pinned Node launchers for Unix and Windows;
+- merge exactly one marker-owned Lattice handler into `hooks.json` while preserving unrelated user hooks;
+- preserve original `hooks.json` ownership across adaptive reinstalls so uninstall remains exact and reversible;
+- retire unchanged superseded versioned runtimes during upgrades while preserving any runtime file whose hash shows user modification;
+- extend the installation receipt to schema v2 with hook/runtime integrity metadata;
+- extend `doctor --strict` to validate the managed hook, runtime hashes, hooks feature, multi-agent backend, and existing config/role integrity;
+- fail adaptive installation when Codex reports the effective hooks backend disabled while the transparent handler is installed;
+- preserve transactional rollback across config, roles, hooks, runtime, and receipt;
+- extend the real-Codex 0.149.1 smoke matrix to validate transparent routing assets across Ubuntu, macOS, and Windows;
+- execute the copied self-contained hook runtime in unit CI, including platform launchers from a `CODEX_HOME` containing spaces;
+- update package verification to require the new transparent-runtime source modules.
+
+### Evaluation and evidence
+
+- add a versioned paired-evaluation seed corpus with deterministic easy/medium/hard/critical tasks;
+- add safe plan-only-by-default evaluation runners for adaptive, Sol-medium, Sol-high, and Terra-medium baselines;
+- protect evaluator files so benchmark runners cannot pass by weakening tests;
+- add machine-readable results, coverage-aware summaries, and Wilson 95% pass-rate intervals;
+- freeze calibration/holdout study design with reproducible seeded paired execution order;
+- add blind-grading bundle generation, separate de-blinding key, and validated grade merge workflow;
+- add a holdout-only fail-closed promotion gate for incomplete evidence, quality regression, critical paired regression, and insufficient measured efficiency improvement;
+- add sanitized public-evidence export and a CI evaluation contract that makes no authenticated/paid model calls;
+- add weekly/manual cross-platform `@openai/codex@latest` structural compatibility canary.
 
 ### Security and reliability
 
+- keep user content in the user role instead of elevating task text through hook context;
+- refuse malformed or ambiguous `hooks.json` states instead of overwriting them;
+- preserve unrelated hooks through adaptive/single/uninstall lifecycle operations;
 - full-study execution refuses to append to an existing result set or reuse an existing study manifest;
 - blind grading refuses to overwrite an existing de-blinding key, and grade application rejects duplicate blind IDs, ambiguous key mappings, duplicate raw run IDs, and mappings to unknown runs;
 - promotion requires current corpus/runner versions, duplicate-free paired trials, and matching candidate/baseline execution environments;
-- public evidence export rejects both mixed versions and a single internally consistent but stale corpus or runner-config version.
+- public evidence export rejects mixed or stale corpus/runner versions.
 
 ### Documentation
 
-- expanded evaluation protocol for frozen study design, repeated paired trials, blind grading, uncertainty, usage coverage, promotion gating, calibration/holdout separation, and sanitized evidence publication;
-- documented the Codex App support boundary: shared Codex configuration compatibility is a target, while native App UI orchestration is not claimed without desktop verification;
-- synchronized English/Chinese README, compatibility policy, research notes, issue-reporting guidance, and roadmap with the implemented evidence controls and remaining external evidence work.
+- make “install once, then chat normally in Codex” the primary English/Chinese quick-start path;
+- document the one-time Codex hook review boundary rather than bypassing hook trust state;
+- document implemented Codex App shared hook/config integration separately from per-App-version UI acceptance;
+- document current upstream limitations for internal non-resumable Desktop turns and image attachment classification;
+- synchronize architecture, installation, compatibility, roadmap, and App-support documentation with the transparent runtime.
 
 ## 0.2.7
 

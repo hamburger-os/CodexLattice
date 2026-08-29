@@ -1,47 +1,83 @@
 # Codex App compatibility
 
-CodexLattice distinguishes shared Codex configuration compatibility from native Codex App orchestration. Passing the CLI smoke suite is not treated as proof that every desktop UI flow is routed through CodexLattice.
+CodexLattice v0.3 uses Codex's user-level `UserPromptSubmit` lifecycle hook instead of requiring the desktop UI to invoke `codex-lattice run`. This gives Codex App and Codex CLI a shared transparent integration path whenever they load the same user Codex configuration and hook layer.
 
-## Supported boundary
+## Intended desktop experience
 
-CodexLattice installs native Codex agent roles and managed configuration under the active Codex home. Those files are designed to remain valid for Codex surfaces that consume the same configuration. The project therefore treats **shared configuration compatibility** with Codex App as an explicit target.
+After:
 
-The supported claim is deliberately narrower than “full App integration”:
+```bash
+codex-lattice install
+codex-lattice doctor --strict
+```
 
-- CodexLattice-managed configuration and role files must remain parseable and non-destructive;
-- unrelated user configuration must be preserved;
-- `single`, `adaptive`, `doctor --strict`, and uninstall must remain reversible from the CLI;
-- a compatible Codex App installation should be able to coexist with the same Codex configuration without requiring a second CodexLattice-specific config tree.
+the normal App flow is simply:
 
-CodexLattice does **not** currently claim that starting an arbitrary task from the Codex App UI automatically invokes `codex-lattice run`, or that every App-specific process/environment path has been regression-tested.
+1. open Codex App;
+2. open/select a workspace;
+3. send an ordinary prompt;
+4. approve the CodexLattice user hook once if Codex presents a hook review prompt;
+5. continue chatting normally.
+
+There is no CodexLattice-specific App command, model picker, or per-workspace routing configuration.
+
+## How the App path works
+
+Adaptive installation creates:
+
+- route-specific native agent roles under the active Codex home;
+- one marker-owned `UserPromptSubmit` command hook in `hooks.json`;
+- a versioned self-contained hook runtime under `CODEX_HOME/codex-lattice/runtime/<version>/`.
+
+For a root user turn, the hook runs the deterministic `buildPlan()` policy and injects only derived routing metadata plus coordinator rules. Raw user prompt text stays in the user role and is not copied into developer context. The root coordinator then delegates repository/tool work to the exact route-specific native agents.
+
+Thread-spawned subagents expose `agent_id` / `agent_type`; CodexLattice skips those hook invocations so delegation cannot recursively re-route itself.
+
+## Current upstream boundaries
+
+Transparent desktop routing is implemented, but several Codex lifecycle details remain outside CodexLattice's control:
+
+- **Hook trust:** non-managed user hooks can require a one-time Codex review. CodexLattice installs the hook but does not write trust state itself.
+- **Internal desktop turns:** current Desktop builds can produce non-resumable internal turns. CodexLattice fails open when `transcript_path` is explicitly `null`, unless `CODEX_LATTICE_ROUTE_EPHEMERAL=1` is set.
+- **Images:** current `UserPromptSubmit` input exposes the text prompt but not image attachment contents. Route classification for multimodal turns therefore uses the text portion only.
+- **Desktop automation:** repository CI can install and validate the real Codex CLI on Linux/macOS/Windows, but it does not drive every released Codex App UI build.
+
+These are compatibility boundaries, not reasons to maintain a second App-specific CodexLattice configuration.
 
 ## Automated evidence
 
-The protected CI matrix tests the pinned Codex CLI baseline on Ubuntu, macOS, and Windows. A separate non-blocking `Codex latest canary` workflow installs `@openai/codex@latest` on the same operating systems and runs the structural install/doctor/mode/uninstall smoke without authenticated model calls.
+Blocking CI installs the pinned real Codex CLI baseline on Ubuntu, macOS, and Windows and verifies:
 
-These jobs validate the shared configuration contract. They do not launch or drive the desktop UI.
+- `hooks` and multi-agent backends are enabled;
+- the managed `UserPromptSubmit` handler parses from the real Codex home;
+- the self-contained hook runtime exists and matches its receipt hashes;
+- GPT-5.6 route roles/model slugs are present;
+- `adaptive → single → adaptive` is reversible;
+- uninstall restores the user's baseline and removes only CodexLattice-owned hook/runtime assets.
+
+A separate latest-Codex canary remains an early compatibility signal rather than a release guarantee.
 
 ## Desktop acceptance checklist
 
-Before upgrading the project claim from “shared configuration compatible” to “desktop App verified,” capture an actual App version and operating system and complete all of the following on a disposable/test Codex profile:
+For an App release/OS combination, use a disposable/test Codex profile and record:
 
-1. install CodexLattice in `adaptive` mode and require `codex-lattice doctor --strict` to pass;
-2. launch Codex App and confirm it starts without configuration parse errors or config migration that removes the managed block;
-3. confirm CodexLattice role files remain unchanged after the App starts and exits;
-4. exercise at least one App task that uses native multi-agent behavior, if the App exposes that surface, and inspect resulting behavior without assuming the CLI entry point was used;
-5. switch to `single`, relaunch the App, and verify the user's baseline Codex configuration remains usable;
-6. re-enable `adaptive`, relaunch, and re-run `doctor --strict`;
-7. uninstall CodexLattice and verify the App still starts with the restored baseline configuration.
+1. `codex-lattice install` and `doctor --strict` succeed;
+2. the App opens the same profile without rewriting/removing the managed config/hook;
+3. the first ordinary prompt presents hook review if needed, then subsequent prompts do not require CodexLattice-specific commands;
+4. a repository task shows native subagent delegation consistent with the selected route;
+5. a subagent turn does not create recursive Lattice delegation;
+6. `mode single` disables transparent routing while preserving baseline App behavior;
+7. `mode adaptive` restores it;
+8. uninstall leaves the App usable and preserves unrelated hooks/config.
 
-Record the App version, Codex CLI version bundled or installed alongside it, OS, and sanitized observations. Do not record credentials or private prompts.
+Record App version, Codex CLI/runtime version, OS, and sanitized observations only.
 
 ## Claim levels
 
-| Surface | Current status | What is proven |
+| Surface | v0.3 status | Evidence |
 | --- | --- | --- |
-| Codex CLI pinned baseline | Supported / blocking CI | cross-platform structural integration and lifecycle restore |
-| Newer Codex CLI | Canary | weekly structural compatibility signal; not a release guarantee |
-| Codex App shared config | Compatibility target | managed config/roles are designed to coexist on the shared Codex configuration surface |
-| Codex App native UI orchestration | Not yet claimed | requires the desktop acceptance checklist and an upstream-supported integration path |
-
-Any future README statement that says “Codex App supported” must preserve this distinction unless desktop verification evidence is published.
+| Codex CLI pinned baseline | Supported / blocking CI | cross-platform hook + agent + lifecycle smoke |
+| Newer Codex CLI | Canary | structural compatibility signal |
+| Codex App shared config/hooks | Implemented integration path | same user-level hook/config assets; no separate Lattice App config |
+| Every Codex App release/UI flow | Acceptance-tested per version | requires the desktop checklist; not implied by CLI CI alone |
+| Image-aware route classification | Limited | text portion only until attachment metadata reaches the hook payload |
