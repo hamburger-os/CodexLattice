@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { buildStudyPlan, promotionDecision, sanitizeEvidence, seededOrder, validateStudy, wilsonInterval } from '../scripts/evidence-lib.mjs';
 import { readJson } from '../scripts/eval-lib.mjs';
@@ -31,6 +34,17 @@ function result(task, runnerId, trial, { passed = true, score = 4, reasoningToke
     outcome: { score, humanLabel: null, notes: null },
     artifacts: { stdout: 'eval/artifacts/x/stdout.txt', stderr: 'eval/artifacts/x/stderr.txt', workspace: 'eval/artifacts/x/workspace' }
   };
+}
+
+function completeHoldoutRows() {
+  const rows = [];
+  for (const task of corpus.tasks.filter((candidate) => study.splits.holdout.includes(candidate.id))) {
+    for (let trial = 1; trial <= study.promotion.minTrialsPerTask; trial += 1) {
+      rows.push(result(task, study.promotion.baseline, trial, { reasoningTokens: 100 }));
+      rows.push(result(task, study.promotion.candidate, trial, { reasoningTokens: 90 }));
+    }
+  }
+  return rows;
 }
 
 test('study config freezes a balanced calibration/holdout split', () => {
@@ -68,30 +82,72 @@ test('promotion gate fails closed when holdout evidence is absent', () => {
 });
 
 test('promotion gate accepts only complete quality-preserving evidence with measured efficiency', () => {
-  const rows = [];
-  for (const task of corpus.tasks.filter((candidate) => study.splits.holdout.includes(candidate.id))) {
-    for (let trial = 1; trial <= study.promotion.minTrialsPerTask; trial += 1) {
-      rows.push(result(task, study.promotion.baseline, trial, { reasoningTokens: 100 }));
-      rows.push(result(task, study.promotion.candidate, trial, { reasoningTokens: 90 }));
-    }
-  }
-  const decision = promotionDecision(rows, study, corpus, runners);
+  const decision = promotionDecision(completeHoldoutRows(), study, corpus, runners);
   assert.equal(decision.eligible, true, decision.reasons.join('; '));
   assert.equal(decision.summaries.candidate.humanScoreCoverage, 1);
   assert.equal(decision.summaries.candidate.efficiencyCoverage, 1);
 });
 
 test('critical paired regression blocks promotion even if efficiency improves', () => {
-  const rows = [];
-  for (const task of corpus.tasks.filter((candidate) => study.splits.holdout.includes(candidate.id))) {
-    for (let trial = 1; trial <= study.promotion.minTrialsPerTask; trial += 1) {
-      rows.push(result(task, study.promotion.baseline, trial, { reasoningTokens: 100 }));
-      rows.push(result(task, study.promotion.candidate, trial, { reasoningTokens: 80, passed: !(task.bucket === 'critical' && trial === 1) }));
-    }
-  }
+  const rows = completeHoldoutRows();
+  const criticalCandidate = rows.find((row) => row.runnerId === study.promotion.candidate && row.bucket === 'critical' && row.trial === 1);
+  criticalCandidate.checker = { ...criticalCandidate.checker, passed: false, exitCode: 1 };
+  criticalCandidate.usage.reasoningTokens = 80;
   const decision = promotionDecision(rows, study, corpus, runners);
   assert.equal(decision.eligible, false);
   assert.ok(decision.reasons.some((reason) => reason.includes('critical paired regression')));
+});
+
+test('promotion gate rejects duplicate task/runner/trial evidence', () => {
+  const rows = completeHoldoutRows();
+  rows.push({ ...rows[0], runId: `${rows[0].runId}-duplicate` });
+  const decision = promotionDecision(rows, study, corpus, runners);
+  assert.equal(decision.eligible, false);
+  assert.ok(decision.reasons.some((reason) => reason.includes('duplicate holdout result')));
+});
+
+test('promotion gate rejects unpaired candidate and baseline trials', () => {
+  const rows = completeHoldoutRows();
+  const taskId = study.splits.holdout[0];
+  const index = rows.findIndex((row) => row.taskId === taskId && row.runnerId === study.promotion.candidate && row.trial === study.promotion.minTrialsPerTask);
+  rows.splice(index, 1);
+  const decision = promotionDecision(rows, study, corpus, runners);
+  assert.equal(decision.eligible, false);
+  assert.ok(decision.reasons.some((reason) => reason.includes('candidate/baseline trials are not paired')));
+});
+
+test('promotion gate rejects paired runs from different environments', () => {
+  const rows = completeHoldoutRows();
+  const candidate = rows.find((row) => row.runnerId === study.promotion.candidate);
+  candidate.environment = { ...candidate.environment, platform: `${candidate.environment.platform}-mismatch` };
+  const decision = promotionDecision(rows, study, corpus, runners);
+  assert.equal(decision.eligible, false);
+  assert.ok(decision.reasons.some((reason) => reason.includes('candidate/baseline environment mismatch')));
+});
+
+test('promotion gate rejects evidence from a stale corpus version', () => {
+  const rows = completeHoldoutRows().map((row) => ({ ...row, corpusVersion: 'stale-corpus' }));
+  const decision = promotionDecision(rows, study, corpus, runners);
+  assert.equal(decision.eligible, false);
+  assert.ok(decision.reasons.some((reason) => reason.includes('must match current corpus version')));
+});
+
+test('full-study runner refuses a non-empty output before any model execution', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-lattice-eval-guard-'));
+  try {
+    const output = path.join(tempDir, 'runs.jsonl');
+    fs.writeFileSync(output, '{}\n', 'utf8');
+    const run = spawnSync(process.execPath, [path.join(repoRoot, 'scripts', 'eval-run.mjs'), '--all', '--execute', '--out', output], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 10000
+    });
+    assert.notEqual(run.status, 0);
+    assert.match(`${run.stderr}\n${run.stdout}`, /refusing full-study append/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('public evidence sanitization omits artifact paths, execution errors, route traces, and human notes', () => {
