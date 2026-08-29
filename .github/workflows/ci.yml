@@ -46,7 +46,7 @@ jobs:
       - name: Confirm Codex CLI
         run: codex --version
       - name: Install CodexLattice package globally
-        run: npm install -g .
+        run: npm install --global --force .
       - name: Confirm CodexLattice global bin
         run: codex-lattice version
       - name: Install CodexLattice into a temporary real CODEX_HOME

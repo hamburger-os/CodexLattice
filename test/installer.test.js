@@ -115,4 +115,3 @@ test('run preflight requires revalidation after Codex version changes', () => wi
   };
   assert.throws(() => assertReadyForRun({ home, runner: newerRunner }), /Codex changed from validated version/);
 }));
-
