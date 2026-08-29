@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolveCodexInvocation } from '../src/codex.js';
+import { buildStudyPlan, validateStudy } from './evidence-lib.mjs';
 import { materializeTask, readJson, restoreProtectedFiles, runnerPlan, validateCorpus, validateResultRecord, validateRunners } from './eval-lib.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -14,11 +15,17 @@ validateCorpus(corpus);
 validateRunners(runnerConfig);
 
 function usage() {
-  console.log('Usage:\n  node scripts/eval-run.mjs [--task ID] [--runner ID] [--trials N] [--out FILE] [--all] [--execute]\n\nWithout --execute this command only prints a plan and performs no model calls.\nExecution requires either --task + --runner or an explicit --all.');
+  console.log('Usage:\n  node scripts/eval-run.mjs [--task ID] [--runner ID] [--trials N] [--out FILE] [--study FILE] [--all] [--execute]\n\nWithout --execute this command only prints a reproducible seeded plan and performs no model calls.\nExecution requires either --task + --runner or an explicit --all.');
 }
 
 function parseArgs(argv) {
-  const args = { execute: false, all: false, trials: 1, out: path.join(repoRoot, 'eval', 'results', 'runs.jsonl') };
+  const args = {
+    execute: false,
+    all: false,
+    trials: 1,
+    out: path.join(repoRoot, 'eval', 'results', 'runs.jsonl'),
+    study: path.join(repoRoot, 'eval', 'study.json')
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--execute') args.execute = true;
@@ -27,6 +34,7 @@ function parseArgs(argv) {
     else if (arg === '--runner') args.runner = argv[++i];
     else if (arg === '--trials') args.trials = Number(argv[++i]);
     else if (arg === '--out') args.out = path.resolve(argv[++i]);
+    else if (arg === '--study') args.study = path.resolve(argv[++i]);
     else if (arg === '--help' || arg === '-h') args.help = true;
     else throw new Error(`unknown argument: ${arg}`);
   }
@@ -118,14 +126,43 @@ function executeOne(task, runner, trial, outputFile, codex) {
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) { usage(); process.exit(0); }
+const study = readJson(args.study);
+validateStudy(study, corpus, runnerConfig);
 const selected = select(args);
-const plans = [];
-for (const task of selected.tasks) for (const runner of selected.runners) plans.push({ taskId: task.id, bucket: task.bucket, runnerId: runner.id, trials: args.trials, invocation: runnerPlan(runner, task.prompt, { repoRoot }) });
+const ordered = buildStudyPlan(study, selected.tasks, selected.runners, args.trials);
+const plans = ordered.map(({ task, runner, trial, split, orderIndex }) => ({
+  taskId: task.id,
+  bucket: task.bucket,
+  split,
+  runnerId: runner.id,
+  trial,
+  orderIndex,
+  invocation: runnerPlan(runner, task.prompt, { repoRoot })
+}));
 
 if (!args.execute) {
-  console.log(JSON.stringify({ mode: 'plan-only', warning: 'No model calls were made. Pass --execute to run an explicitly selected task/runner pair.', combinations: plans }, null, 2));
+  console.log(JSON.stringify({
+    mode: 'plan-only',
+    warning: 'No model calls were made. Pass --execute to run an explicitly selected task/runner pair, or --all for the full seeded study.',
+    studyVersion: study.version,
+    studySeed: study.seed,
+    combinations: plans
+  }, null, 2));
   process.exit(0);
 }
 
+const manifestFile = `${args.out}.manifest.json`;
+fs.mkdirSync(path.dirname(manifestFile), { recursive: true });
+fs.writeFileSync(manifestFile, `${JSON.stringify({
+  schemaVersion: '1',
+  studyVersion: study.version,
+  studySeed: study.seed,
+  corpusVersion: corpus.version,
+  runnerConfigVersion: runnerConfig.version,
+  trials: args.trials,
+  generatedAt: new Date().toISOString(),
+  combinations: plans.map(({ invocation, ...entry }) => entry)
+}, null, 2)}\n`, 'utf8');
+
 const codex = codexVersion();
-for (const task of selected.tasks) for (const runner of selected.runners) for (let trial = 1; trial <= args.trials; trial += 1) executeOne(task, runner, trial, args.out, codex);
+for (const { task, runner, trial } of ordered) executeOne(task, runner, trial, args.out, codex);
