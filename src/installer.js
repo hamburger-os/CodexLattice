@@ -189,8 +189,16 @@ function writeRouteRoles(home) {
   return manifest;
 }
 
-function removeOwnedRoles(home) {
-  for (const filename of ownedAgentFilenames()) fs.rmSync(path.join(agentsDir(home), filename), { force: true });
+function removeOwnedRoles(home, filenames = ownedAgentFilenames()) {
+  for (const filename of filenames) fs.rmSync(path.join(agentsDir(home), filename), { force: true });
+}
+
+function receiptRoleFilenames(receipt) {
+  if (!Array.isArray(receipt?.roles)) return [];
+  const known = new Set(ownedAgentFilenames());
+  return receipt.roles
+    .map((role) => role?.filename)
+    .filter((filename) => typeof filename === 'string' && known.has(filename));
 }
 
 function readConfig(home) {
@@ -405,9 +413,20 @@ export function assertReadyForRun({ home = codexHome(), runner = runCodex } = {}
 export function uninstall({ home = codexHome(), runner = runCodex } = {}) {
   fs.mkdirSync(home, { recursive: true });
   const config = configPath(home);
-  if (fs.existsSync(config)) atomicWrite(config, passthroughConfig(fs.readFileSync(config, 'utf8')));
-  removeOwnedRoles(home);
-  fs.rmSync(receiptPath(home), { force: true });
+  const configText = readConfig(home);
+  const receipt = readReceipt(home);
+  const active = isManagedActive(configText);
+  if (fs.existsSync(config)) atomicWrite(config, passthroughConfig(configText));
+
+  // A bare filename is not sufficient proof of ownership: a user may have
+  // created it before installing CodexLattice. The managed block owns current
+  // route files; a receipt owns only the files it explicitly recorded.
+  const filesToRemove = new Set(receiptRoleFilenames(receipt));
+  if (active) {
+    for (const filename of roleSpecs().map((spec) => spec.filename)) filesToRemove.add(filename);
+  }
+  removeOwnedRoles(home, filesToRemove);
+  if (receipt) fs.rmSync(receiptPath(home), { force: true });
 
   let validation = null;
   try {

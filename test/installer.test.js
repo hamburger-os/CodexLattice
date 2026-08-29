@@ -97,6 +97,16 @@ test('uninstall removes only CodexLattice config and roles', () => withTempHome(
   for (const spec of roleSpecs()) assert.equal(fs.existsSync(path.join(home, 'agents', spec.filename)), false);
 }));
 
+test('uninstall preserves unassociated CodexLattice-namespaced files', () => withTempHome((home) => {
+  const file = path.join(home, 'agents', 'codex-lattice-explorer.toml');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, 'user data\n');
+
+  uninstall({ home, runner: supportedCodexRunner });
+
+  assert.equal(fs.readFileSync(file, 'utf8'), 'user data\n');
+}));
+
 test('run preflight requires revalidation after Codex version changes', () => withTempHome((home) => {
   install('adaptive', { home, runner: supportedCodexRunner });
   const newerRunner = (args) => {
