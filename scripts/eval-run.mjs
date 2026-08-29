@@ -15,7 +15,7 @@ validateCorpus(corpus);
 validateRunners(runnerConfig);
 
 function usage() {
-  console.log('Usage:\n  node scripts/eval-run.mjs [--task ID] [--runner ID] [--trials N] [--out FILE] [--study FILE] [--all] [--execute]\n\nWithout --execute this command only prints a reproducible seeded plan and performs no model calls.\nExecution requires either --task + --runner or an explicit --all.');
+  console.log('Usage:\n  node scripts/eval-run.mjs [--task ID] [--runner ID] [--trials N] [--out FILE] [--study FILE] [--all] [--execute]\n\nWithout --execute this command only prints a reproducible seeded plan and performs no model calls.\nExecution requires either --task + --runner or an explicit --all. Full-study execution requires a fresh output path.');
 }
 
 function parseArgs(argv) {
@@ -151,18 +151,26 @@ if (!args.execute) {
   process.exit(0);
 }
 
-const manifestFile = `${args.out}.manifest.json`;
-fs.mkdirSync(path.dirname(manifestFile), { recursive: true });
-fs.writeFileSync(manifestFile, `${JSON.stringify({
-  schemaVersion: '1',
-  studyVersion: study.version,
-  studySeed: study.seed,
-  corpusVersion: corpus.version,
-  runnerConfigVersion: runnerConfig.version,
-  trials: args.trials,
-  generatedAt: new Date().toISOString(),
-  combinations: plans.map(({ invocation, ...entry }) => entry)
-}, null, 2)}\n`, 'utf8');
+if (args.all) {
+  const manifestFile = `${args.out}.manifest.json`;
+  if (fs.existsSync(args.out) && fs.statSync(args.out).size > 0) {
+    throw new Error(`refusing full-study append: output already contains results: ${args.out}`);
+  }
+  if (fs.existsSync(manifestFile)) {
+    throw new Error(`refusing full-study reuse: manifest already exists: ${manifestFile}`);
+  }
+  fs.mkdirSync(path.dirname(manifestFile), { recursive: true });
+  fs.writeFileSync(manifestFile, `${JSON.stringify({
+    schemaVersion: '1',
+    studyVersion: study.version,
+    studySeed: study.seed,
+    corpusVersion: corpus.version,
+    runnerConfigVersion: runnerConfig.version,
+    trials: args.trials,
+    generatedAt: new Date().toISOString(),
+    combinations: plans.map(({ invocation, ...entry }) => entry)
+  }, null, 2)}\n`, 'utf8');
+}
 
 const codex = codexVersion();
 for (const { task, runner, trial } of ordered) executeOne(task, runner, trial, args.out, codex);
