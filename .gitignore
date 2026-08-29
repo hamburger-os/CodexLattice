@@ -1,3 +1,6 @@
 node_modules/
 .DS_Store
 *.log
+eval/results/runs.jsonl
+eval/results/*.local.json
+eval/artifacts/

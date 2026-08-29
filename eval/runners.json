@@ -1,0 +1,1 @@
+{"version":"1","runners":[{"id":"adaptive","kind":"lattice"},{"id":"sol-medium","kind":"codex","model":"gpt-5.6-sol","effort":"medium"},{"id":"sol-high","kind":"codex","model":"gpt-5.6-sol","effort":"high"},{"id":"terra-medium","kind":"codex","model":"gpt-5.6-terra","effort":"medium"}]}

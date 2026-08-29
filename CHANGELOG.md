@@ -4,6 +4,18 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 
 ## Unreleased
 
+### Added
+
+- versioned paired-evaluation seed corpus with two deterministic tasks in each easy/medium/hard/critical bucket;
+- safe plan-only-by-default evaluation runner for adaptive, Sol-medium, Sol-high, and Terra-medium baselines;
+- protected evaluator-file restoration so benchmark runners cannot pass by weakening tests;
+- machine-readable result schema, ignored raw artifact storage, and coverage-aware result summarization;
+- CI evaluation contract that validates the corpus and runner plan without authenticated or paid model calls.
+
+### Documentation
+
+- expanded evaluation protocol for repeated paired trials, blind grading, usage coverage, calibration/holdout separation, and evidence publication.
+
 ## 0.2.6
 
 ### Added

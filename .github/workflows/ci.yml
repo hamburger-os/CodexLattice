@@ -69,10 +69,26 @@ jobs:
           package-manager-cache: false
       - run: npm run verify:package
 
+  evaluation-contract:
+    name: evaluation contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Validate versioned evaluation corpus and runners
+        run: npm run eval:validate
+      - name: Prove planning mode makes no model calls
+        run: npm run eval:plan -- --task easy-slugify --runner sol-medium
+
   required:
     name: required / ci
     if: ${{ always() }}
-    needs: [unit, real-codex-install, package-verification]
+    needs: [unit, real-codex-install, package-verification, evaluation-contract]
     runs-on: ubuntu-latest
     steps:
       - name: Require all CI groups to pass
@@ -80,7 +96,9 @@ jobs:
           UNIT_RESULT: ${{ needs.unit.result }}
           CODEX_RESULT: ${{ needs.real-codex-install.result }}
           PACKAGE_RESULT: ${{ needs.package-verification.result }}
+          EVALUATION_RESULT: ${{ needs.evaluation-contract.result }}
         run: |
           test "$UNIT_RESULT" = "success"
           test "$CODEX_RESULT" = "success"
           test "$PACKAGE_RESULT" = "success"
+          test "$EVALUATION_RESULT" = "success"
