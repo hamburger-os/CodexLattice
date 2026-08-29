@@ -40,6 +40,7 @@ const results = parseJsonLines(fs.readFileSync(args.file, 'utf8'));
 for (const row of results) validateResultRecord(row);
 
 if (fs.existsSync(args.out)) throw new Error(`blind output already exists: ${args.out}`);
+if (fs.existsSync(args.key)) throw new Error(`blind key already exists: ${args.key}`);
 fs.mkdirSync(args.out, { recursive: true });
 const grading = [];
 const mapping = [];
