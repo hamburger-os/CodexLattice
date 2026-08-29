@@ -6,6 +6,7 @@ import path from 'node:path';
 import { roleSpecs } from '../../src/roles.js';
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-lattice-real-codex-'));
+const packageVersion = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;
 
 function installedCliPath() {
   const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -38,11 +39,12 @@ try {
   fs.writeFileSync(path.join(home, 'config.toml'), baseline);
 
   const version = runCli(['version']).stdout.trim();
-  assert.equal(version, '0.2.4');
+  assert.equal(version, packageVersion);
 
   const installResult = runCli(['install', 'adaptive']);
   const installed = JSON.parse(installResult.stdout);
   assert.notEqual(installed.validation.overallStatus, 'error');
+  assert.equal(installed.receipt.packageVersion, packageVersion);
 
   const config = fs.readFileSync(path.join(home, 'config.toml'), 'utf8');
   assert.match(config, /\[agents\.lattice_plan_sol_high\]/);
@@ -54,6 +56,7 @@ try {
   // real Codex binary and the exact CODEX_HOME written above.
   const doctor = JSON.parse(runCli(['doctor', '--strict']).stdout);
   assert.equal(doctor.overallStatus, 'ok', JSON.stringify(doctor));
+  assert.equal(doctor.receipt.packageVersion, packageVersion);
   assert.equal(doctor.nativeProbe.checks.find((check) => check.name === 'multi_agent_backend')?.ok, true);
   assert.equal(doctor.nativeProbe.checks.find((check) => check.name === 'bundled_model_catalog')?.ok, true);
 
@@ -62,11 +65,13 @@ try {
   const singleDoctor = JSON.parse(runCli(['doctor', '--strict']).stdout);
   assert.equal(singleDoctor.overallStatus, 'ok', JSON.stringify(singleDoctor));
   assert.equal(singleDoctor.adaptiveActive, false);
+  assert.equal(singleDoctor.receipt.packageVersion, packageVersion);
 
   runCli(['mode', 'adaptive']);
   assert.match(fs.readFileSync(path.join(home, 'config.toml'), 'utf8'), /CodexLattice managed block/);
   const adaptiveDoctor = JSON.parse(runCli(['doctor', '--strict']).stdout);
   assert.equal(adaptiveDoctor.overallStatus, 'ok', JSON.stringify(adaptiveDoctor));
+  assert.equal(adaptiveDoctor.receipt.packageVersion, packageVersion);
 
   const uninstallResult = JSON.parse(runCli(['uninstall']).stdout);
   assert.notEqual(uninstallResult.validation?.overallStatus, 'error');
