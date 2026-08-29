@@ -58,10 +58,13 @@ test('explicit codex-lattice run can bypass the transparent hook', () => {
   assert.equal(shouldRouteUserPrompt(payload, { CODEX_LATTICE_BYPASS_HOOK: '1' }), false);
 });
 
-test('plan permission mode instructs coordinator not to implement', () => {
-  const result = handleUserPromptSubmit(rootPayload({ permission_mode: 'plan' }), { env: {} });
-  assert.match(result.hookSpecificOutput.additionalContext, /"planMode": true/);
-  assert.match(result.hookSpecificOutput.additionalContext, /do not perform implementation or file edits/i);
+test('approval metadata is never misclassified as native Codex Plan mode', () => {
+  const result = handleUserPromptSubmit(rootPayload({ permission_mode: 'bypassPermissions' }), { env: {} });
+  const context = result.hookSpecificOutput.additionalContext;
+  assert.match(context, /"nativeApprovalMode": "bypassPermissions"/);
+  assert.doesNotMatch(context, /"planMode"/);
+  assert.match(context, /preserve all native Codex collaboration-mode/i);
+  assert.match(context, /approval metadata only/i);
 });
 
 test('hook runner fails open on malformed stdin', async () => {
