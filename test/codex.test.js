@@ -45,6 +45,46 @@ test('Windows npm shim resolver targets the package JS launcher without a shell'
   }
 });
 
+test('Windows Desktop resolver finds the newest versioned executable without PATH', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { windowsDesktopCodexExecutable } = await import('../src/codex.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-desktop-'));
+  try {
+    const oldExe = path.join(root, 'OpenAI', 'Codex', 'bin', 'old', 'codex.exe');
+    const currentExe = path.join(root, 'OpenAI', 'Codex', 'bin', 'current', 'codex.exe');
+    fs.mkdirSync(path.dirname(oldExe), { recursive: true });
+    fs.mkdirSync(path.dirname(currentExe), { recursive: true });
+    fs.writeFileSync(oldExe, 'old');
+    fs.writeFileSync(currentExe, 'current');
+    fs.utimesSync(oldExe, new Date('2026-01-01'), new Date('2026-01-01'));
+    fs.utimesSync(currentExe, new Date('2026-02-01'), new Date('2026-02-01'));
+    assert.equal(windowsDesktopCodexExecutable(root), currentExe);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a stale explicit launcher falls back to the Windows Desktop executable', { skip: process.platform !== 'win32' }, async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const { resolveCodexInvocation } = await import('../src/codex.js');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-stale-launcher-'));
+  try {
+    const desktopExe = path.join(root, 'OpenAI', 'Codex', 'bin', 'current', 'codex.exe');
+    fs.mkdirSync(path.dirname(desktopExe), { recursive: true });
+    fs.writeFileSync(desktopExe, 'current');
+    const result = resolveCodexInvocation({
+      env: { LOCALAPPDATA: root, CODEX_LATTICE_CODEX: path.join(root, 'missing', 'codex.js') }
+    });
+    assert.deepEqual(result, { command: desktopExe, prefixArgs: [], source: 'windows-desktop' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('stable multi_agent=true is sufficient even when multi_agent_v2=false', () => {
   const result = probeCodex({ home: '/tmp/example', runner: supportedCodexRunner, requireMultiAgent: true });
   assert.equal(result.overallStatus, 'ok');

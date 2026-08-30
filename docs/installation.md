@@ -10,6 +10,12 @@ CodexLattice treats installation as a compatibility transaction, not as text ins
 
 Codex 0.149.1 exposes both the stable `hooks` feature and native multi-agent support required by transparent adaptive mode.
 
+## Windows Desktop source-checkout maintenance
+
+The normal runtime remains independent of a global npm installation: adaptive install copies its Hook runtime into `CODEX_HOME`. For maintenance commands run from a Windows source checkout, use `bin\codex-lattice.cmd` from the repository root. The launcher uses the system Node.js and the CLI discovers the versioned Codex Desktop executable when it is not on `PATH`.
+
+If `CODEX_LATTICE_CODEX` names an absolute executable that no longer exists after an npm or Codex upgrade, CodexLattice treats it as stale and falls back to normal discovery. An existing override remains authoritative.
+
 ## Capability boundaries
 
 v0.3.1 separates three compatibility surfaces instead of treating them as one global prerequisite:
