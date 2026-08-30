@@ -2,7 +2,7 @@
 import crypto from 'node:crypto';
 import { buildPlan, shadowComparison } from '../src/policy.js';
 import { buildCodexExecArgs } from '../src/runtime.js';
-import { runCodex } from '../src/codex.js';
+import { assertCodexExplicitRunCompatible, runCodex } from '../src/codex.js';
 import {
   PACKAGE_VERSION,
   assertReadyForRun,
@@ -102,6 +102,7 @@ try {
     const task = args.join(' ');
     if (!task) throw new Error('run requires a task');
     assertReadyForRun();
+    assertCodexExplicitRunCompatible();
     const plan = buildPlan(task);
     const runId = crypto.randomUUID();
     const startedAt = Date.now();
