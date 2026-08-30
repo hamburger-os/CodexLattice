@@ -1,6 +1,5 @@
 @echo off
 setlocal
-set "CODEX_LATTICE_CODEX="
 
 where node >nul 2>nul
 if errorlevel 1 (
