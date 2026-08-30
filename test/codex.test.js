@@ -66,7 +66,7 @@ test('Windows Desktop resolver finds the newest versioned executable without PAT
   }
 });
 
-test('a stale explicit launcher falls back to the Windows Desktop executable', async () => {
+test('a stale explicit launcher falls back to the Windows Desktop executable', { skip: process.platform !== 'win32' }, async () => {
   const fs = await import('node:fs');
   const os = await import('node:os');
   const path = await import('node:path');
