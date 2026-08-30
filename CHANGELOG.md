@@ -4,6 +4,11 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 
 ## Unreleased
 
+### Windows source-checkout maintenance
+
+- add a bundled `bin/codex-lattice.cmd` launcher so maintenance commands can run from a Windows source checkout without a global npm package;
+- discover the versioned Codex Desktop executable when it is not on `PATH`, and recover from stale absolute `CODEX_LATTICE_CODEX` launch paths.
+
 ## 0.3.1
 
 ### Reliability and compatibility

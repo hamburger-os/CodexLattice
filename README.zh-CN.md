@@ -36,6 +36,19 @@ codex-lattice doctor --strict
 codex
 ```
 
+### 不通过 npm 的本地维护入口（Windows）
+
+如果你保留了本仓库检出，不需要把 CodexLattice 发布或安装为 npm 包。直接使用随仓库提供的启动器：
+
+```powershell
+cd <CodexLattice 仓库根目录>
+.\bin\codex-lattice.cmd doctor --strict
+.\bin\codex-lattice.cmd mode adaptive
+.\bin\codex-lattice.cmd mode single
+```
+
+启动器会使用系统 Node.js，并自动发现版本化的 Codex Desktop 可执行文件；无需依赖 npm 的全局 `codex` 或 `codex-lattice` shim。
+
 从此直接输入普通任务：
 
 ```text

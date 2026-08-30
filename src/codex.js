@@ -41,6 +41,23 @@ export function windowsNpmLauncherFromShim(shimPath) {
   return fs.existsSync(candidate) ? candidate : null;
 }
 
+export function windowsDesktopCodexExecutable(localAppData = process.env.LOCALAPPDATA) {
+  if (!localAppData) return null;
+  const binDir = path.join(localAppData, 'OpenAI', 'Codex', 'bin');
+  try {
+    return fs.readdirSync(binDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => {
+        const file = path.join(binDir, entry.name, 'codex.exe');
+        return fs.existsSync(file) ? { file, mtimeMs: fs.statSync(file).mtimeMs } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.mtimeMs - a.mtimeMs || a.file.localeCompare(b.file))[0]?.file || null;
+  } catch {
+    return null;
+  }
+}
+
 function firstWhere(name) {
   const result = spawnSync('where.exe', [name], { encoding: 'utf8', windowsHide: true });
   if (result.status !== 0) return null;
@@ -50,25 +67,35 @@ function firstWhere(name) {
     .find(Boolean) || null;
 }
 
-export function resolveCodexInvocation() {
-  const override = process.env.CODEX_LATTICE_CODEX;
+export function resolveCodexInvocation({ env = process.env } = {}) {
+  const override = env.CODEX_LATTICE_CODEX;
   if (override) {
-    if (/\.m?js$/i.test(override)) {
+    if (path.isAbsolute(override) && !fs.existsSync(override)) {
+      // A stale explicit path is common after an npm/Codex upgrade. Treat it as
+      // absent so the supported Windows Desktop discovery can recover.
+    } else if (/\.m?js$/i.test(override)) {
       return { command: process.execPath, prefixArgs: [override], source: 'explicit-js-launcher' };
-    }
-    if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(override)) {
+    } else if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(override)) {
       const launcher = windowsNpmLauncherFromShim(override);
       if (!launcher) {
         throw new Error('CODEX_LATTICE_CODEX points to a Windows command shim that cannot be launched safely without a shell. Point it to codex.exe or the @openai/codex bin/codex.js launcher instead.');
       }
       return { command: process.execPath, prefixArgs: [launcher], source: 'explicit-npm-shim' };
+    } else {
+      return { command: override, prefixArgs: [], source: 'explicit' };
     }
-    return { command: override, prefixArgs: [], source: 'explicit' };
   }
 
   if (process.platform === 'win32') {
     const nativeExe = firstWhere('codex.exe');
     if (nativeExe) return { command: nativeExe, prefixArgs: [], source: 'windows-native' };
+
+    // Codex Desktop registers its executable with Windows, which lets PowerShell
+    // resolve `codex` even when the versioned Desktop bin directory is not on PATH.
+    // Node's spawn/where.exe cannot use that registration, so locate the Desktop
+    // installation directly before falling back to an npm command shim.
+    const desktopExe = windowsDesktopCodexExecutable(env.LOCALAPPDATA);
+    if (desktopExe) return { command: desktopExe, prefixArgs: [], source: 'windows-desktop' };
 
     const npmShim = firstWhere('codex.cmd');
     const launcher = windowsNpmLauncherFromShim(npmShim);
@@ -89,7 +116,7 @@ export function runCodex(args, { home, cwd = process.cwd(), stdio = 'pipe', env:
   if (home) env.CODEX_HOME = home;
   let invocation;
   try {
-    invocation = resolveCodexInvocation();
+    invocation = resolveCodexInvocation({ env });
   } catch (error) {
     return { status: null, stdout: '', stderr: '', error };
   }

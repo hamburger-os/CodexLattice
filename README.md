@@ -36,6 +36,18 @@ codex-lattice doctor --strict
 codex
 ```
 
+### Local maintenance without npm (Windows)
+
+If you keep a source checkout, CodexLattice does not need to be published or installed as an npm package. From the repository root, use the bundled launcher:
+
+```powershell
+.\bin\codex-lattice.cmd doctor --strict
+.\bin\codex-lattice.cmd mode adaptive
+.\bin\codex-lattice.cmd mode single
+```
+
+The launcher uses the system Node.js and discovers the versioned Codex Desktop executable, without relying on global npm `codex` or `codex-lattice` shims.
+
 From then on, just type ordinary prompts such as:
 
 ```text
