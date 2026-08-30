@@ -120,7 +120,15 @@ function transparentHookInstalled(home) {
   }
 }
 
-export function probeCodex({ home, runner = runCodex, checkConfig = true, checkModels = true } = {}) {
+export function probeCodex({
+  home,
+  runner = runCodex,
+  checkConfig = true,
+  checkModels = true,
+  checkExplicitRun = false,
+  requireMultiAgent = checkConfig,
+  requireHooks = transparentHookInstalled(home)
+} = {}) {
   const checks = [];
   const errors = [];
   const warnings = [];
@@ -140,11 +148,13 @@ export function probeCodex({ home, runner = runCodex, checkConfig = true, checkM
   checks.push({ name: 'codex_version', ok: supportedVersion, detail: `${version} (minimum ${MIN_CODEX_VERSION}; tested ${TESTED_CODEX_VERSION})` });
   if (!supportedVersion) errors.push(`Codex ${version} is older than the minimum supported ${MIN_CODEX_VERSION}.`);
 
-  const execHelp = runner(['exec', '--help'], { home });
-  const execHelpText = resultText(execHelp);
-  const execFlagsOk = execHelp?.status === 0 && /--model\b/.test(execHelpText) && /(?:^|\s)-c\b|--config\b/m.test(execHelpText);
-  checks.push({ name: 'exec_runtime_overrides', ok: execFlagsOk, detail: execFlagsOk ? '--model and config override are available' : runnerFailure(execHelp) });
-  if (!execFlagsOk) errors.push('This Codex CLI does not expose the runtime --model/config override surface required by the explicit CodexLattice run command.');
+  if (checkExplicitRun) {
+    const execHelp = runner(['exec', '--help'], { home });
+    const execHelpText = resultText(execHelp);
+    const execFlagsOk = execHelp?.status === 0 && /--model\b/.test(execHelpText) && /(?:^|\s)-c\b|--config\b/m.test(execHelpText);
+    checks.push({ name: 'explicit_run_overrides', ok: execFlagsOk, detail: execFlagsOk ? '--model and config override are available' : runnerFailure(execHelp) });
+    if (!execFlagsOk) errors.push('This Codex CLI does not expose the runtime --model/config override surface required by the explicit `codex-lattice run` command.');
+  }
 
   let featuresText = null;
   if (checkConfig && errors.length === 0) {
@@ -159,34 +169,31 @@ export function probeCodex({ home, runner = runCodex, checkConfig = true, checkM
         const match = line.trim().match(/^(\S+)\s+.+?\s+(true|false)$/i);
         if (match) featureStates.set(match[1], match[2].toLowerCase() === 'true');
       }
+
       const multiAgentKeys = ['multi_agent', 'multi_agent_v2'].filter((key) => featureStates.has(key));
       const multiAgentEnabled = multiAgentKeys.some((key) => featureStates.get(key) === true);
       checks.push({
         name: 'multi_agent_backend',
-        ok: multiAgentEnabled,
+        ok: multiAgentKeys.length ? multiAgentEnabled : null,
+        required: Boolean(requireMultiAgent),
         detail: multiAgentKeys.length
           ? multiAgentKeys.map((key) => `${key}=${featureStates.get(key)}`).join(', ')
           : 'no recognized multi-agent feature key reported'
       });
-      if (!multiAgentEnabled) {
+      if (requireMultiAgent && !multiAgentEnabled) {
         errors.push('Codex does not report an enabled multi-agent backend; adaptive orchestration cannot be guaranteed to work.');
       }
 
-      const requiresHooks = transparentHookInstalled(home);
       if (featureStates.has('hooks')) {
         const hooksEnabled = featureStates.get('hooks') === true;
-        checks.push({ name: 'hooks_backend', ok: hooksEnabled, detail: `hooks=${hooksEnabled}` });
-        if (!hooksEnabled && requiresHooks) {
-          errors.push('Codex reports hooks=false while the CodexLattice transparent hook is installed; ordinary prompt routing cannot work.');
-        } else if (!hooksEnabled) {
-          warnings.push('Codex reports hooks=false; transparent prompt routing is unavailable in the current configuration.');
+        checks.push({ name: 'hooks_backend', ok: hooksEnabled, required: Boolean(requireHooks), detail: `hooks=${hooksEnabled}` });
+        if (requireHooks && !hooksEnabled) {
+          errors.push('Codex reports hooks=false while transparent CodexLattice routing is required; ordinary prompt routing cannot work.');
         }
       } else {
-        checks.push({ name: 'hooks_backend', ok: null, detail: 'hooks feature key was not reported by this Codex build' });
-        if (requiresHooks) {
-          errors.push('Could not verify an enabled hooks backend while the CodexLattice transparent hook is installed.');
-        } else {
-          warnings.push('Could not verify the hooks feature from `codex features list`.');
+        checks.push({ name: 'hooks_backend', ok: null, required: Boolean(requireHooks), detail: 'hooks feature key was not reported by this Codex build' });
+        if (requireHooks) {
+          errors.push('Could not verify an enabled hooks backend while transparent CodexLattice routing is required.');
         }
       }
     }
@@ -217,7 +224,14 @@ export function probeCodex({ home, runner = runCodex, checkConfig = true, checkM
 }
 
 export function assertCodexCompatible(options = {}) {
-  const probe = probeCodex({ ...options, checkConfig: false, checkModels: false });
+  const probe = probeCodex({
+    ...options,
+    checkConfig: false,
+    checkModels: false,
+    checkExplicitRun: false,
+    requireMultiAgent: false,
+    requireHooks: false
+  });
   if (probe.overallStatus === 'error') {
     const error = new Error(probe.errors.join(' '));
     error.probe = probe;
