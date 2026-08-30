@@ -1,10 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { managedHookHandler, managedHookLocations, parseHooksDocument } from './hooks.js';
 
 export const MIN_CODEX_VERSION = '0.149.0';
 export const TESTED_CODEX_VERSION = '0.149.1';
 const LATTICE_HOOK_MARKER = '--codex-lattice-hook-v1';
+const PACKAGE_VERSION = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 function versionTuple(version) {
   const match = String(version || '').match(/(?:^|\s|v)(\d+)\.(\d+)\.(\d+)(?:\D|$)/);
@@ -120,14 +122,72 @@ function transparentHookInstalled(home) {
   }
 }
 
+function executeTrustedTransparentHookProbe(home) {
+  const hooksFile = path.join(home, 'hooks.json');
+  if (!fs.existsSync(hooksFile)) return { ok: false, detail: 'hooks.json is missing' };
+
+  let document;
+  try {
+    document = parseHooksDocument(fs.readFileSync(hooksFile, 'utf8'));
+  } catch (error) {
+    return { ok: false, detail: error.message };
+  }
+  const locations = managedHookLocations(document);
+  if (locations.length !== 1) return { ok: false, detail: `expected exactly one managed hook, found ${locations.length}` };
+
+  const actual = locations[0].handler;
+  const expected = managedHookHandler(home, PACKAGE_VERSION);
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    return { ok: false, detail: 'managed hook command does not match the current package/runtime manifest; reinstall CodexLattice' };
+  }
+
+  const payload = {
+    session_id: 'codex-lattice-doctor',
+    turn_id: 'transparent-runtime-probe',
+    transcript_path: path.join(home, 'codex-lattice', 'doctor-runtime-probe.jsonl'),
+    cwd: home,
+    hook_event_name: 'UserPromptSubmit',
+    model: 'gpt-5.6-luna',
+    permission_mode: 'default',
+    prompt: 'codex-lattice doctor transparent runtime probe'
+  };
+  const input = JSON.stringify(payload);
+  let result;
+  if (process.platform === 'win32') {
+    const command = actual.commandWindows || actual.command_windows || actual.command;
+    result = spawnSync(process.env.ComSpec || 'cmd.exe', ['/D', '/S', '/C', `"${command}"`], {
+      input,
+      encoding: 'utf8',
+      windowsHide: true,
+      windowsVerbatimArguments: true
+    });
+  } else {
+    result = spawnSync('/bin/sh', ['-c', actual.command], { input, encoding: 'utf8' });
+  }
+  if (result.error) return { ok: false, detail: result.error.message };
+  if (result.status !== 0) return { ok: false, detail: resultText(result) || `exit ${result.status}` };
+
+  try {
+    const output = JSON.parse(String(result.stdout || '').trim());
+    const ok = output?.continue === true && output?.hookSpecificOutput?.hookEventName === 'UserPromptSubmit';
+    return {
+      ok,
+      detail: ok ? 'trusted managed hook executed and returned routing context' : (resultText(result) || 'hook returned fail-open output without routing context')
+    };
+  } catch (error) {
+    return { ok: false, detail: `hook returned invalid JSON: ${error.message}; ${resultText(result)}` };
+  }
+}
+
 export function probeCodex({
   home,
   runner = runCodex,
   checkConfig = true,
   checkModels = true,
   checkExplicitRun = false,
-  requireMultiAgent = checkConfig,
-  requireHooks = transparentHookInstalled(home)
+  requireMultiAgent = transparentHookInstalled(home),
+  requireHooks = transparentHookInstalled(home),
+  checkTransparentRuntime = requireHooks
 } = {}) {
   const checks = [];
   const errors = [];
@@ -199,7 +259,13 @@ export function probeCodex({
     }
   }
 
-  if (checkModels && errors.length === 0) {
+  if (checkTransparentRuntime && requireHooks && errors.length === 0) {
+    const runtime = executeTrustedTransparentHookProbe(home);
+    checks.push({ name: 'transparent_hook_execution', ok: runtime.ok, required: true, detail: runtime.detail });
+    if (!runtime.ok) errors.push(`The installed transparent hook runtime did not pass an execution/integrity probe: ${runtime.detail}`);
+  }
+
+  if (checkModels && requireMultiAgent && errors.length === 0) {
     const models = runner(['debug', 'models', '--bundled'], { home });
     const modelText = resultText(models);
     if (models?.status === 0) {
@@ -230,7 +296,26 @@ export function assertCodexCompatible(options = {}) {
     checkModels: false,
     checkExplicitRun: false,
     requireMultiAgent: false,
-    requireHooks: false
+    requireHooks: false,
+    checkTransparentRuntime: false
+  });
+  if (probe.overallStatus === 'error') {
+    const error = new Error(probe.errors.join(' '));
+    error.probe = probe;
+    throw error;
+  }
+  return probe;
+}
+
+export function assertCodexExplicitRunCompatible(options = {}) {
+  const probe = probeCodex({
+    ...options,
+    checkConfig: false,
+    checkModels: false,
+    checkExplicitRun: true,
+    requireMultiAgent: false,
+    requireHooks: false,
+    checkTransparentRuntime: false
   });
   if (probe.overallStatus === 'error') {
     const error = new Error(probe.errors.join(' '));
