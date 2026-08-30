@@ -5,7 +5,8 @@ import {
   assertCodexExplicitRunCompatible,
   compareVersions,
   parseCodexVersion,
-  probeCodex
+  probeCodex,
+  resolveCodexInvocation
 } from '../src/codex.js';
 import { oldCodexRunner, supportedCodexRunner } from './helpers.js';
 
@@ -64,6 +65,30 @@ test('Windows Desktop resolver finds the newest versioned executable without PAT
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('keeps a valid explicit JavaScript launcher authoritative', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-explicit-launcher-'));
+  try {
+    const launcher = path.join(root, 'codex.js');
+    fs.writeFileSync(launcher, '#!/usr/bin/env node\n');
+    assert.deepEqual(resolveCodexInvocation({ env: { CODEX_LATTICE_CODEX: launcher } }), {
+      command: process.execPath,
+      prefixArgs: [launcher],
+      source: 'explicit-js-launcher'
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Windows source launcher preserves CODEX_LATTICE_CODEX', async () => {
+  const fs = await import('node:fs');
+  const source = fs.readFileSync(new URL('../bin/codex-lattice.cmd', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /^\s*set\s+"?CODEX_LATTICE_CODEX=/im);
 });
 
 test('a stale explicit launcher falls back to the Windows Desktop executable', { skip: process.platform !== 'win32' }, async () => {
