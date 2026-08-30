@@ -30,7 +30,10 @@ The coordinator must not:
 - substitute its own model-selection guess for the route plan;
 - pass model or reasoning-effort overrides when spawning Lattice roles;
 - exceed the route's bounded parallelism;
-- escalate before concrete failure, unresolved ambiguity, material disagreement, or elevated risk.
+- escalate before concrete failure, unresolved ambiguity, material disagreement, or elevated risk;
+- weaken native Codex collaboration-mode, sandbox, approval, or hook-trust restrictions.
+
+`permission_mode` from the current Hook runtime is treated as approval metadata only; CodexLattice does not infer the UI collaboration/Plan mode from that field. Native Codex instructions remain authoritative for whether implementation is permitted on the turn.
 
 ## Native execution backend
 
@@ -50,29 +53,53 @@ Codex 0.149.1 exposes thread-spawned subagent context on lifecycle hook requests
 
 Current Desktop builds can also produce internal non-resumable turns. CodexLattice fails open when `transcript_path` is explicitly `null` unless `CODEX_LATTICE_ROUTE_EPHEMERAL=1` is set.
 
-The hook runner itself is fail-open: malformed input or a routing-runtime exception returns `continue: true` rather than making ordinary Codex unusable.
+The hook runtime itself is fail-open: malformed input, bootstrap integrity failure, or a routing-runtime exception returns `continue: true` rather than making ordinary Codex unusable.
 
-## Self-contained hook runtime
+## Manifest-bound self-contained hook runtime
 
 Adaptive install copies the minimal routing runtime into:
 
 `CODEX_HOME/codex-lattice/runtime/<package-version>/`
 
-It contains the policy, role mapping, coordinator-context generator, hook handler, ESM package marker, runner, and platform launchers. Launchers pin the Node executable used for installation, so Codex App/CLI do not need to discover the global npm package on their own PATH.
+It contains the policy, role mapping, coordinator-context generator, hook handler, ESM package marker, runner, and a generated runtime manifest. The manifest records the SHA-256 of every executable runtime file.
 
-The generated runtime is hashed in the installation receipt and verified by `doctor --strict`.
+Starting with v0.3.1, the `hooks.json` command no longer trusts only a mutable launcher path. The reviewed command contains:
+
+- the Node executable used during installation;
+- a small inline verifier bootstrap;
+- the runtime-manifest path;
+- the expected manifest SHA-256;
+- the stable Lattice ownership marker.
+
+Before importing `hook-runner.js`, the inline bootstrap verifies the manifest digest and then every executable file listed by the manifest. If anything differs, the altered runtime is not imported and the turn fails open to native Codex.
+
+This gives the hook trust boundary an executable-content binding: changing a runtime file alone cannot silently cause the reviewed command to load that changed content. Package upgrades produce a new versioned command/runtime and can therefore be reviewed again by Codex according to its own trust policy.
+
+The same runtime files are independently hashed in the installation receipt.
 
 ## Installation integrity
 
 Adaptive installation is transactional and fail-closed:
 
-`PROBE CODEX -> PARSE BASELINE -> SNAPSHOT -> WRITE ROLES -> WRITE RUNTIME -> MERGE HOOK -> WRITE CONFIG -> NATIVE PARSE/FEATURE CHECK -> RECEIPT`
+`PROBE BASE CODEX -> PARSE BASELINE -> SNAPSHOT -> WRITE ROLES -> WRITE RUNTIME+MANIFEST -> MERGE TRUSTED HOOK -> WRITE CONFIG -> NATIVE FEATURE CHECK -> SYNTHETIC HOOK EXECUTION -> RECEIPT`
 
 A structural validation failure restores the pre-install snapshot. Existing user hooks and unrelated agent roles are preserved. The managed hook carries a stable ownership marker so mode changes and uninstall remove only the CodexLattice handler.
 
-When the transparent hook is installed, an effective `hooks=false` (or an unverifiable hooks backend) is a structural error rather than a warning: an installation that cannot receive ordinary prompts must not claim transparent adaptive mode.
+Adaptive reinstall preserves the original pre-Lattice ownership state of `hooks.json`. On version upgrades, unchanged superseded runtimes are retired after the new installation validates, while files whose receipt hashes show external modification are preserved instead of deleted speculatively.
+
+When transparent routing is required, an effective `hooks=false`, missing multi-agent backend, command/runtime integrity failure, or failed synthetic Hook execution is a structural error rather than a warning: an installation that cannot receive and route ordinary prompts must not claim transparent adaptive mode.
 
 Codex itself owns user-hook trust. CodexLattice does not write trusted hashes or bypass the one-time review boundary.
+
+## Capability separation and recovery
+
+v0.3.1 deliberately separates capability gates:
+
+- baseline installation/recovery requires a supported Codex CLI and parseable baseline config;
+- adaptive mode additionally requires hooks, multi-agent, route roles, trusted runtime execution, and model-catalog checks where available;
+- advanced `codex-lattice run` separately requires the `codex exec` runtime override flags it uses.
+
+This prevents an optional compatibility command from blocking ordinary transparent installation and keeps `mode single` useful even when adaptive-only upstream surfaces are temporarily unavailable.
 
 ## Parallelism
 
@@ -85,6 +112,8 @@ Parallelism is a route/coordinator constraint rather than a blanket global concu
 ## Verification
 
 Deterministic tests, type checks, static analysis, reproducible commands, and direct repository evidence are preferred over model voting. Stronger Sol review routes are reserved for risk, validation gaps, or evidence-backed escalation.
+
+`doctor --strict` adds structural validation that normal Hook turns intentionally do not perform on every request. It verifies static receipt/runtime integrity and executes a synthetic no-model prompt through the exact trusted command, requiring actual routing context. This catches stale Node paths, command drift, manifest drift, and startup failures while preserving fail-open behavior during ordinary conversations.
 
 ## Calibration path
 
