@@ -5,6 +5,7 @@ import {
   HOOK_MARKER,
   hookCommands,
   hookRuntimeAssets,
+  hookRuntimeBundle,
   managedHookLocations,
   parseHooksDocument,
   withManagedHook,
@@ -20,7 +21,7 @@ test('managed UserPromptSubmit hook coexists with unrelated hooks', () => {
     }
   }));
 
-  const installed = withManagedHook(original, '/tmp/codex-home', '0.3.0');
+  const installed = withManagedHook(original, '/tmp/codex-home', '0.3.1');
   const locations = managedHookLocations(installed);
   assert.equal(locations.length, 1);
   assert.equal(installed.hooks.PostToolUse[0].hooks[0].command, 'echo user');
@@ -31,28 +32,39 @@ test('managed UserPromptSubmit hook coexists with unrelated hooks', () => {
 });
 
 test('reinstall replaces rather than duplicates the managed hook', () => {
-  const first = withManagedHook({ hooks: {} }, '/tmp/codex-home', '0.3.0');
-  const second = withManagedHook(first, '/tmp/codex-home', '0.3.0');
+  const first = withManagedHook({ hooks: {} }, '/tmp/codex-home', '0.3.1');
+  const second = withManagedHook(first, '/tmp/codex-home', '0.3.1');
   assert.equal(managedHookLocations(second).length, 1);
 });
 
-test('hook commands use versioned CODEX_HOME launchers and a stable ownership marker', () => {
-  const commands = hookCommands(path.join('/tmp', 'codex home'), '0.3.0');
-  assert.match(commands.command, /codex-lattice.*runtime.*0\.3\.0.*hook/);
+test('hook commands pin Node and bind the trusted command to a versioned runtime manifest digest', () => {
+  const home = path.join('/tmp', 'codex home');
+  const runtime = hookRuntimeBundle(home, '0.3.1', { nodePath: '/opt/node/bin/node' });
+  const commands = hookCommands(home, '0.3.1', runtime);
+  assert.match(commands.command, /\/opt\/node\/bin\/node/);
+  assert.match(commands.command, /runtime-manifest\.json/);
+  assert.match(commands.command, new RegExp(runtime.manifestSha256));
   assert.match(commands.command, new RegExp(HOOK_MARKER));
-  assert.match(commands.commandWindows, /hook\.cmd/);
+  assert.match(commands.commandWindows, /runtime-manifest\.json/);
+  assert.match(commands.commandWindows, new RegExp(runtime.manifestSha256));
   assert.match(commands.commandWindows, new RegExp(HOOK_MARKER));
 });
 
-test('hook runtime is self-contained and does not depend on npm PATH', () => {
-  const assets = hookRuntimeAssets('/tmp/codex-home', '0.3.0', { nodePath: '/opt/node/bin/node' });
+test('hook runtime is self-contained and manifest hashes every executable runtime file', () => {
+  const assets = hookRuntimeAssets('/tmp/codex-home', '0.3.1', { nodePath: '/opt/node/bin/node' });
   const byName = new Map(assets.map((asset) => [asset.filename, asset]));
-  for (const name of ['policy.js', 'roles.js', 'coordinator.js', 'hook.js', 'package.json', 'hook-runner.js', 'hook', 'hook.cmd']) {
+  for (const name of ['policy.js', 'roles.js', 'coordinator.js', 'hook.js', 'package.json', 'hook-runner.js', 'runtime-manifest.json']) {
     assert.ok(byName.has(name), `missing runtime asset ${name}`);
   }
-  assert.match(byName.get('hook').content, /\/opt\/node\/bin\/node/);
-  assert.match(byName.get('hook.cmd').content, /\/opt\/node\/bin\/node/);
-  assert.equal(byName.get('hook').mode, 0o755);
+  const manifest = JSON.parse(byName.get('runtime-manifest.json').content);
+  assert.equal(manifest.nodeExecutable, '/opt/node/bin/node');
+  assert.match(manifest.runner, /hook-runner\.js$/);
+  assert.equal(manifest.files.length, 6);
+  assert.deepEqual(
+    new Set(manifest.files.map((entry) => entry.filename)),
+    new Set(['policy.js', 'roles.js', 'coordinator.js', 'hook.js', 'package.json', 'hook-runner.js'])
+  );
+  assert.ok(manifest.files.every((entry) => /^[a-f0-9]{64}$/.test(entry.sha256)));
 });
 
 test('malformed hooks document is rejected before mutation helpers run', () => {
