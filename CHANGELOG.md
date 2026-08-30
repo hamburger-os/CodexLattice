@@ -4,6 +4,29 @@ Notable project changes are documented here. CodexLattice follows semantic versi
 
 ## Unreleased
 
+## 0.3.1
+
+### Reliability and compatibility
+
+- separate base Codex compatibility, transparent-adaptive capability, and advanced explicit-run capability probes so ordinary adaptive installation no longer depends on `codex exec --model` / config-override flags used only by `codex-lattice run`;
+- keep `mode single` usable as a recovery path when multi-agent, hooks, model-catalog, or explicit-run surfaces are unavailable, while still requiring the baseline Codex CLI/config to parse;
+- move the explicit `codex-lattice run` override check to the explicit run path instead of making it an installation-wide prerequisite;
+- make adaptive install/doctor execute a synthetic no-model `UserPromptSubmit` probe through the exact installed hook command and require real routing context before reporting transparent routing healthy.
+
+### Hook trust and runtime integrity
+
+- bind the reviewed hook command to a versioned runtime manifest SHA-256 rather than trusting only a mutable launcher path;
+- use a small inline Node bootstrap carried in the hook command to verify the manifest digest and every executable runtime file before importing the hook runner;
+- fail open without loading the runtime when bootstrap integrity verification fails, while `doctor --strict` reports the installation unhealthy;
+- pin the Node executable in the reviewed command so a moved/removed runtime executable or a stale package/runtime command is detected by the transparent execution probe;
+- retain receipt hashes and transactional rollback as an independent installation-integrity layer.
+
+### Tests and documentation
+
+- exercise the actual manifest-bound hook command from `CODEX_HOME` paths containing spaces;
+- add regression coverage proving adaptive install is independent of the explicit-run override surface and `mode single` still works after adaptive capabilities disappear;
+- update README, architecture, installation, compatibility, security, contributing, research notes, release guidance, and compatibility-report instructions for the v0.3 transparent runtime and v0.3.1 hardening boundaries.
+
 ## 0.3.0
 
 ### Transparent orchestration

@@ -45,17 +45,43 @@ body:
       placeholder: codex-lattice version
     validations:
       required: true
+  - type: dropdown
+    id: lattice_mode
+    attributes:
+      label: CodexLattice mode
+      description: Which mode was active when the problem occurred?
+      options:
+        - adaptive
+        - single
+        - not installed / uninstalling
+        - unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: hook_review
+    attributes:
+      label: User Hook review / trust observation
+      description: What happened when Codex encountered the CodexLattice UserPromptSubmit Hook?
+      options:
+        - Review was shown and approved
+        - Review was shown and not approved
+        - No review was shown
+        - Not applicable (single / uninstalled)
+        - Unknown
+    validations:
+      required: true
   - type: textarea
     id: install
     attributes:
       label: Installation / upgrade path
-      description: Explain how Codex, Codex App (if applicable), and CodexLattice were installed or upgraded.
+      description: Explain how Codex, Codex App (if applicable), and CodexLattice were installed or upgraded, including whether `codex-lattice install`, `mode adaptive`, or `mode single` was run.
     validations:
       required: true
   - type: textarea
     id: doctor
     attributes:
       label: Sanitized `doctor --strict` output
+      description: Include the capability and transparent-hook execution checks, but remove private paths/configuration if needed.
       render: text
     validations:
       required: true
@@ -63,7 +89,7 @@ body:
     id: app_boundary
     attributes:
       label: Codex App compatibility details (if applicable)
-      description: State whether the App and CLI used the same CODEX_HOME/config, how CodexLattice was launched, and which acceptance-checklist step failed. See docs/codex-app.md.
+      description: State whether the App and CLI used the same CODEX_HOME/profile, whether ordinary prompts reached transparent routing, and which acceptance-checklist step failed. See docs/codex-app.md.
   - type: textarea
     id: result
     attributes:

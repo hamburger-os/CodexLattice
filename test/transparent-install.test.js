@@ -19,28 +19,36 @@ function readHooks(home) {
   return parseHooksDocument(fs.readFileSync(path.join(home, 'hooks.json'), 'utf8'));
 }
 
-function runInstalledHookLauncher(receipt, payload) {
-  const launcherName = process.platform === 'win32' ? 'hook.cmd' : 'hook';
-  const launcher = receipt.runtime.files.find((entry) => entry.filename === launcherName)?.file;
-  assert.ok(launcher, `missing ${launcherName}`);
-
+function runInstalledHookCommand(home, payload) {
+  const handler = managedHookLocations(readHooks(home))[0]?.handler;
+  assert.ok(handler, 'missing managed hook handler');
   if (process.platform === 'win32') {
-    // Codex 0.149.x invokes command hooks through `cmd.exe /C` and appends the
-    // complete hook command as a raw, outer-quoted command tail. Node normally
-    // re-quotes argv on Windows, so windowsVerbatimArguments is required here
-    // to exercise the same parsing path instead of testing Node's argv encoder.
-    const commandLine = `call "${launcher}" ${HOOK_MARKER}`;
-    return spawnSync(process.env.ComSpec || 'cmd.exe', ['/C', `"${commandLine}"`], {
+    const command = handler.commandWindows || handler.command_windows || handler.command;
+    return spawnSync(process.env.ComSpec || 'cmd.exe', ['/D', '/S', '/C', `"${command}"`], {
       input: JSON.stringify(payload),
       encoding: 'utf8',
       windowsHide: true,
       windowsVerbatimArguments: true
     });
   }
-  return spawnSync(launcher, [HOOK_MARKER], {
+  return spawnSync('/bin/sh', ['-c', handler.command], {
     input: JSON.stringify(payload),
     encoding: 'utf8'
   });
+}
+
+function noExplicitRunRunner(args) {
+  if (args.join(' ') === 'exec --help') return { status: 2, stdout: '', stderr: 'exec override surface removed' };
+  return supportedCodexRunner(args);
+}
+
+function degradedSingleRunner(args) {
+  const joined = args.join(' ');
+  if (joined === '--version') return { status: 0, stdout: 'codex-cli 0.149.1\n', stderr: '' };
+  if (joined === 'features list') return { status: 0, stdout: 'multi_agent stable false\nmulti_agent_v2 stable false\nhooks stable false\n', stderr: '' };
+  if (joined === 'exec --help') return { status: 2, stdout: '', stderr: 'exec override surface removed' };
+  if (joined === 'debug models --bundled') return { status: 2, stdout: '', stderr: 'model catalog unavailable' };
+  return { status: 1, stdout: '', stderr: `unexpected fake codex args: ${joined}` };
 }
 
 test('adaptive install creates transparent hook runtime and preserves unrelated hooks', () => withTempHome((home) => {
@@ -56,15 +64,17 @@ test('adaptive install creates transparent hook runtime and preserves unrelated 
   assert.equal(document.hooks.PostToolUse[0].hooks[0].command, 'echo user-hook');
   assert.equal(managedHookLocations(document).length, 1);
   assert.match(managedHookLocations(document)[0].handler.command, new RegExp(HOOK_MARKER));
+  assert.match(managedHookLocations(document)[0].handler.command, /runtime-manifest\.json/);
   assert.equal(result.receipt.schemaVersion, 2);
   assert.match(result.receipt.backend, /transparent-user-prompt-hook/);
-  assert.ok(result.receipt.runtime.files.length >= 8);
+  assert.ok(result.receipt.runtime.files.length >= 7);
   assert.ok(result.receipt.runtime.files.every((entry) => fs.existsSync(entry.file)));
   assert.equal(result.transparentRouting, true);
+  assert.equal(result.validation.checks.find((entry) => entry.name === 'transparent_hook_execution')?.ok, true);
 }));
 
-test('installed platform hook launcher runs from a CODEX_HOME containing spaces', () => withTempHome((home) => {
-  const result = install('adaptive', { home, runner: supportedCodexRunner });
+test('trusted installed hook command runs from a CODEX_HOME containing spaces', () => withTempHome((home) => {
+  install('adaptive', { home, runner: supportedCodexRunner });
   const payload = {
     session_id: 'session-installed-runtime',
     turn_id: 'turn-installed-runtime',
@@ -75,13 +85,30 @@ test('installed platform hook launcher runs from a CODEX_HOME containing spaces'
     permission_mode: 'default',
     prompt: 'refactor authentication across multiple modules'
   };
-  const child = runInstalledHookLauncher(result.receipt, payload);
+  const child = runInstalledHookCommand(home, payload);
 
   assert.equal(child.status, 0, child.stderr);
   const output = JSON.parse(child.stdout);
   assert.equal(output.continue, true);
   assert.equal(output.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
   assert.match(output.hookSpecificOutput.additionalContext, /root process is a coordinator/i);
+}));
+
+test('adaptive installation does not depend on the advanced explicit-run override surface', () => withTempHome((home) => {
+  const result = install('adaptive', { home, runner: noExplicitRunRunner });
+  assert.equal(result.validation.overallStatus, 'ok');
+  assert.equal(result.transparentRouting, true);
+}));
+
+test('single mode remains an escape hatch when multi-agent, hooks and explicit-run surfaces are unavailable', () => withTempHome((home) => {
+  install('adaptive', { home, runner: supportedCodexRunner });
+  const result = setMode('single', { home, runner: degradedSingleRunner });
+  assert.equal(result.validation.overallStatus, 'ok');
+  assert.equal(result.transparentRouting, false);
+  assert.equal(fs.existsSync(path.join(home, 'hooks.json')), false);
+  const report = doctor({ home, runner: degradedSingleRunner });
+  assert.equal(report.overallStatus, 'ok', JSON.stringify(report));
+  assert.equal(report.transparentRoutingActive, false);
 }));
 
 test('adaptive reinstall preserves original hooks-file ownership', () => withTempHome((home) => {
@@ -168,13 +195,14 @@ test('single mode removes only CodexLattice hook and owned runtime', () => withT
   assert.ok(runtimeFiles.every((file) => !fs.existsSync(file)));
 }));
 
-test('doctor detects transparent runtime drift', () => withTempHome((home) => {
+test('doctor detects transparent runtime drift before treating routing as active', () => withTempHome((home) => {
   const result = install('adaptive', { home, runner: supportedCodexRunner });
   fs.appendFileSync(result.receipt.runtime.files[0].file, '// drift\n');
   const report = doctor({ home, runner: supportedCodexRunner });
   assert.equal(report.overallStatus, 'error');
   assert.equal(report.transparentRoutingActive, false);
-  assert.match(report.errors.join(' '), /runtime file\(s\) are missing or modified/);
+  assert.match(report.errors.join(' '), /runtime|integrity/i);
+  assert.equal(report.nativeProbe.checks.find((entry) => entry.name === 'transparent_hook_execution')?.ok, false);
 }));
 
 test('uninstall removes a hooks file created solely by CodexLattice', () => withTempHome((home) => {

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -7,6 +8,32 @@ export const HOOK_TIMEOUT_SECONDS = 10;
 export const HOOK_CONTEXT_LIMIT = 8192;
 
 const RUNTIME_SOURCE_FILES = ['policy.js', 'roles.js', 'coordinator.js', 'hook.js'];
+const RUNTIME_MANIFEST = 'runtime-manifest.json';
+const BOOTSTRAP_SOURCE = `const fs=require('node:fs');
+const crypto=require('node:crypto');
+const {pathToFileURL}=require('node:url');
+(async()=>{
+  const manifestPath=process.argv[2];
+  const expectedManifestSha=process.argv[3];
+  const manifestBytes=fs.readFileSync(manifestPath);
+  const manifestSha=crypto.createHash('sha256').update(manifestBytes).digest('hex');
+  if(manifestSha!==expectedManifestSha) throw new Error('runtime manifest digest mismatch');
+  const manifest=JSON.parse(manifestBytes);
+  for(const entry of manifest.files){
+    const actual=crypto.createHash('sha256').update(fs.readFileSync(entry.file)).digest('hex');
+    if(actual!==entry.sha256) throw new Error('runtime file digest mismatch: '+entry.filename);
+  }
+  await import(pathToFileURL(manifest.runner).href);
+})().catch((error)=>{
+  process.stderr.write('codex-lattice hook bootstrap: '+(error&&error.message?error.message:String(error))+'\\n');
+  process.stdout.write(JSON.stringify({continue:true})+'\\n');
+});`;
+const BOOTSTRAP_EVAL = "eval(Buffer.from(process.argv[1],'base64').toString())";
+const BOOTSTRAP_BASE64 = Buffer.from(BOOTSTRAP_SOURCE, 'utf8').toString('base64');
+
+function digest(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
 
 export function hooksPath(home) {
   return path.join(home, 'hooks.json');
@@ -22,8 +49,7 @@ export function hookRuntimePaths(home, version) {
     ...RUNTIME_SOURCE_FILES.map((name) => path.join(dir, name)),
     path.join(dir, 'package.json'),
     path.join(dir, 'hook-runner.js'),
-    path.join(dir, 'hook'),
-    path.join(dir, 'hook.cmd')
+    path.join(dir, RUNTIME_MANIFEST)
   ];
 }
 
@@ -98,64 +124,19 @@ function windowsCommandQuote(value) {
   return `"${String(value).replace(/"/g, '""')}"`;
 }
 
-export function hookCommands(home, version) {
-  const dir = hookRuntimeDir(home, version);
-  const unixLauncher = path.join(dir, 'hook');
-  const windowsLauncher = path.join(dir, 'hook.cmd');
-  return {
-    command: `${shellQuote(unixLauncher)} ${HOOK_MARKER}`,
-    commandWindows: `call ${windowsCommandQuote(windowsLauncher)} ${HOOK_MARKER}`
-  };
-}
-
-export function managedHookHandler(home, version) {
-  return {
-    type: 'command',
-    ...hookCommands(home, version),
-    timeout: HOOK_TIMEOUT_SECONDS,
-    statusMessage: 'CodexLattice routing',
-    additionalContextLimit: HOOK_CONTEXT_LIMIT
-  };
-}
-
-export function withManagedHook(document, home, version) {
-  const next = withoutManagedHook(document);
-  if (!Array.isArray(next.hooks[HOOK_EVENT])) next.hooks[HOOK_EVENT] = [];
-  next.hooks[HOOK_EVENT].push({ hooks: [managedHookHandler(home, version)] });
-  return next;
-}
-
-export function renderHooksDocument(document) {
-  return `${JSON.stringify(document, null, 2)}\n`;
-}
-
-export function hooksDocumentHasUserContent(document) {
-  if (Object.values(document?.hooks || {}).some((groups) => Array.isArray(groups) && groups.length)) return true;
-  return Object.keys(document || {}).some((key) => key !== 'hooks');
-}
-
 function sourceText(name) {
   return fs.readFileSync(new URL(`./${name}`, import.meta.url), 'utf8');
 }
 
-function shellLauncher(nodePath, runnerPath) {
-  return `#!/bin/sh\nexec ${shellQuote(nodePath)} ${shellQuote(runnerPath)} "$@"\n`;
-}
-
-function windowsLauncher(nodePath) {
-  const escapedNode = String(nodePath).replace(/"/g, '""');
-  return `@echo off\r\n"${escapedNode}" "%~dp0hook-runner.js" %*\r\n`;
-}
-
-export function hookRuntimeAssets(home, version, { nodePath = process.execPath } = {}) {
+export function hookRuntimeBundle(home, version, { nodePath = process.execPath } = {}) {
   const dir = hookRuntimeDir(home, version);
-  const assets = RUNTIME_SOURCE_FILES.map((name) => ({
+  const executableAssets = RUNTIME_SOURCE_FILES.map((name) => ({
     filename: name,
     file: path.join(dir, name),
     content: sourceText(name),
     mode: 0o644
   }));
-  assets.push(
+  executableAssets.push(
     {
       filename: 'package.json',
       file: path.join(dir, 'package.json'),
@@ -167,19 +148,82 @@ export function hookRuntimeAssets(home, version, { nodePath = process.execPath }
       file: path.join(dir, 'hook-runner.js'),
       content: "import { runHookFromStdin } from './hook.js';\nawait runHookFromStdin();\n",
       mode: 0o644
-    },
-    {
-      filename: 'hook',
-      file: path.join(dir, 'hook'),
-      content: shellLauncher(nodePath, path.join(dir, 'hook-runner.js')),
-      mode: 0o755
-    },
-    {
-      filename: 'hook.cmd',
-      file: path.join(dir, 'hook.cmd'),
-      content: windowsLauncher(nodePath),
-      mode: 0o644
     }
   );
-  return assets;
+
+  const manifest = {
+    schemaVersion: 1,
+    nodeExecutable: nodePath,
+    runner: path.join(dir, 'hook-runner.js'),
+    files: executableAssets.map((asset) => ({
+      filename: asset.filename,
+      file: asset.file,
+      sha256: digest(asset.content)
+    }))
+  };
+  const manifestContent = `${JSON.stringify(manifest, null, 2)}\n`;
+  const manifestPath = path.join(dir, RUNTIME_MANIFEST);
+  const manifestSha256 = digest(manifestContent);
+  const assets = [
+    ...executableAssets,
+    {
+      filename: RUNTIME_MANIFEST,
+      file: manifestPath,
+      content: manifestContent,
+      mode: 0o644
+    }
+  ];
+
+  return {
+    dir,
+    nodeExecutable: nodePath,
+    manifestPath,
+    manifestSha256,
+    assets
+  };
+}
+
+export function hookRuntimeAssets(home, version, options = {}) {
+  return hookRuntimeBundle(home, version, options).assets;
+}
+
+export function hookCommands(home, version, runtime = hookRuntimeBundle(home, version)) {
+  const args = [
+    '-e',
+    BOOTSTRAP_EVAL,
+    BOOTSTRAP_BASE64,
+    runtime.manifestPath,
+    runtime.manifestSha256,
+    HOOK_MARKER
+  ];
+  return {
+    command: [shellQuote(runtime.nodeExecutable), ...args.map(shellQuote)].join(' '),
+    commandWindows: [windowsCommandQuote(runtime.nodeExecutable), ...args.map(windowsCommandQuote)].join(' ')
+  };
+}
+
+export function managedHookHandler(home, version, runtime = hookRuntimeBundle(home, version)) {
+  return {
+    type: 'command',
+    ...hookCommands(home, version, runtime),
+    timeout: HOOK_TIMEOUT_SECONDS,
+    statusMessage: 'CodexLattice routing',
+    additionalContextLimit: HOOK_CONTEXT_LIMIT
+  };
+}
+
+export function withManagedHook(document, home, version, runtime = hookRuntimeBundle(home, version)) {
+  const next = withoutManagedHook(document);
+  if (!Array.isArray(next.hooks[HOOK_EVENT])) next.hooks[HOOK_EVENT] = [];
+  next.hooks[HOOK_EVENT].push({ hooks: [managedHookHandler(home, version, runtime)] });
+  return next;
+}
+
+export function renderHooksDocument(document) {
+  return `${JSON.stringify(document, null, 2)}\n`;
+}
+
+export function hooksDocumentHasUserContent(document) {
+  if (Object.values(document?.hooks || {}).some((groups) => Array.isArray(groups) && groups.length)) return true;
+  return Object.keys(document || {}).some((key) => key !== 'hooks');
 }

@@ -8,7 +8,7 @@ CodexLattice borrows methods, not branding or code, from several lines of work:
 - Coding-agent routers such as Autohand Routes and agent-router: explicit policy, observability, hard constraints, and model/specialist separation.
 - Codex native subagents: role-scoped model and reasoning-effort configuration makes heterogeneous orchestration possible without rebuilding the coding runtime.
 
-CodexLattice's intended niche is lifecycle orchestration specifically for Codex GPT-5.6: stage-aware planning/exploration/execution/verification, quality-ceiling-first routing, evidence-triggered escalation, bounded parallelism, reversible Codex configuration, and a single-mode escape hatch.
+CodexLattice's intended niche is lifecycle orchestration specifically for Codex GPT-5.6: stage-aware planning/exploration/execution/verification, quality-ceiling-first routing, evidence-triggered escalation, bounded parallelism, reversible Codex configuration, transparent ordinary-chat integration, and a reliable single-mode escape hatch.
 
 ## Evidence boundary
 
@@ -18,4 +18,14 @@ Those controls make an experiment auditable; they do **not** themselves prove th
 
 ## Codex App boundary
 
-CodexLattice is implemented against Codex CLI configuration and native agent-role behavior. Codex App / desktop compatibility is therefore treated as a separate integration surface rather than inferred from CLI success. The repository documents a manual desktop acceptance checklist in [`codex-app.md`](codex-app.md), while automated compatibility canaries exercise supported CLI behavior across Linux, macOS, and Windows. App-specific claims should only be made after the App is shown to use the same effective Codex configuration and the documented acceptance checks pass.
+Starting with v0.3, CodexLattice has an implemented shared integration path for Codex CLI and Codex App surfaces that load the same user-level Codex configuration and lifecycle-hook layer. Adaptive installation places route-specific native roles, one `UserPromptSubmit` handler, and a self-contained runtime under the user's `CODEX_HOME`; the desktop UI does not need a second CodexLattice-specific router or wrapper command.
+
+That implemented shared path is still distinct from claiming that every released Codex App build has been acceptance-tested. App-specific background/internal turns, hook review UX, attachment metadata, and future lifecycle changes remain version-specific compatibility concerns. The repository therefore keeps a manual desktop acceptance checklist in [`codex-app.md`](codex-app.md), while automated compatibility tests exercise the supported CLI/config/hook contract across Linux, macOS, and Windows.
+
+Claims about desktop behavior should distinguish:
+
+- **implemented integration:** ordinary root prompts can enter the same user-level hook/config path without `codex-lattice run`;
+- **blocking structural evidence:** pinned real-Codex CLI smoke proves the generated config, hook command, runtime integrity probe, mode lifecycle, and uninstall behavior;
+- **per-App acceptance:** a particular desktop version/OS has been manually shown to load the same profile and satisfy the documented checklist.
+
+Do not infer the third level from the first two.

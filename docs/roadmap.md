@@ -36,6 +36,17 @@ v0.3 combines the previously separate integration and calibration milestones. Th
 - real-Codex cross-platform smoke covers hook/config/runtime lifecycle;
 - desktop compatibility policy now distinguishes implemented shared hook integration from per-App-version UI acceptance.
 
+### v0.3.1 hardening follow-up
+
+The first post-release review of transparent mode identified recovery and trust-boundary hardening that does not require changing the routing heuristic. v0.3.1 addresses it by:
+
+- separating base Codex, transparent-adaptive, and advanced explicit-run capability probes;
+- keeping `mode single` usable when adaptive-only Codex surfaces are unhealthy or disappear upstream;
+- moving `codex exec --model` / config-override checks to the explicit `codex-lattice run` path only;
+- binding the reviewed Hook command to a SHA-256 runtime manifest with an inline verifier that runs before runtime import;
+- adding a synthetic no-model trusted-command execution probe to adaptive install and `doctor --strict`;
+- synchronizing security, installation, compatibility, contribution, App, research, release, and bilingual entry-point documentation with the hardened runtime contract.
+
 ### Evaluation and evidence infrastructure implemented
 
 - versioned self-contained seed corpus with easy/medium/hard/critical buckets;

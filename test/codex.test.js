@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareVersions, parseCodexVersion, probeCodex } from '../src/codex.js';
+import {
+  assertCodexCompatible,
+  assertCodexExplicitRunCompatible,
+  compareVersions,
+  parseCodexVersion,
+  probeCodex
+} from '../src/codex.js';
 import { oldCodexRunner, supportedCodexRunner } from './helpers.js';
 
 test('Codex version parser accepts CLI version output', () => {
@@ -9,7 +15,7 @@ test('Codex version parser accepts CLI version output', () => {
 });
 
 test('native probe validates runtime flags and active config', () => {
-  const result = probeCodex({ home: '/tmp/example', runner: supportedCodexRunner });
+  const result = probeCodex({ home: '/tmp/example', runner: supportedCodexRunner, requireMultiAgent: true });
   assert.equal(result.overallStatus, 'ok');
   assert.equal(result.version, '0.149.1');
   assert.ok(result.checks.some((check) => check.name === 'native_config_parse' && check.ok));
@@ -40,20 +46,29 @@ test('Windows npm shim resolver targets the package JS launcher without a shell'
 });
 
 test('stable multi_agent=true is sufficient even when multi_agent_v2=false', () => {
-  const result = probeCodex({ home: '/tmp/example', runner: supportedCodexRunner });
+  const result = probeCodex({ home: '/tmp/example', runner: supportedCodexRunner, requireMultiAgent: true });
   assert.equal(result.overallStatus, 'ok');
   const check = result.checks.find((item) => item.name === 'multi_agent_backend');
   assert.equal(check?.ok, true);
 });
 
-test('probe fails closed when no multi-agent backend is enabled', () => {
+test('adaptive capability probe fails closed when no multi-agent backend is enabled', () => {
   const runner = (args) => {
     if (args.join(' ') === 'features list') {
       return { status: 0, stdout: 'multi_agent stable false\nmulti_agent_v2 stable false\n', stderr: '' };
     }
     return supportedCodexRunner(args);
   };
-  const result = probeCodex({ home: '/tmp/example', runner });
+  const result = probeCodex({ home: '/tmp/example', runner, requireMultiAgent: true, checkModels: false });
   assert.equal(result.overallStatus, 'error');
   assert.match(result.errors.join(' '), /enabled multi-agent backend/);
+});
+
+test('base compatibility does not depend on the advanced explicit-run override surface', () => {
+  const runner = (args) => {
+    if (args.join(' ') === 'exec --help') return { status: 2, stdout: '', stderr: 'removed override flags' };
+    return supportedCodexRunner(args);
+  };
+  assert.doesNotThrow(() => assertCodexCompatible({ runner }));
+  assert.throws(() => assertCodexExplicitRunCompatible({ runner }), /explicit `codex-lattice run`/);
 });

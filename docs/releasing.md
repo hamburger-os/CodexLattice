@@ -21,12 +21,12 @@ A request is intentionally tiny and immutable:
 
 ```json
 {
-  "version": "0.2.6",
+  "version": "X.Y.Z",
   "targetSha": "<full 40-character release commit SHA>"
 }
 ```
 
-The filename must be exactly `v0.2.6.json` for version `0.2.6`. The target SHA must already be contained in the reviewed branch. If the tag already exists, the request is accepted only when it resolves to the exact same commit; tag movement fails closed.
+The real filename must be exactly `vX.Y.Z.json` for the concrete semantic version. The target SHA must already be contained in the reviewed branch. If the tag already exists, the request is accepted only when it resolves to the exact same commit; tag movement fails closed.
 
 ## npm status
 
@@ -45,6 +45,7 @@ Before opening the release-request PR:
 - move relevant `CHANGELOG.md` entries from `Unreleased` into the release version;
 - ensure `required / ci` and CodeQL are green on the release commit;
 - run `npm run verify:package` locally when practical;
+- for transparent-runtime changes, ensure the real-Codex smoke verifies the installed manifest-bound Hook command and `doctor --strict` on Linux, macOS, and Windows;
 - record the exact intended `main` commit SHA in `.github/release-requests/vX.Y.Z.json`.
 
 After the request PR is merged, the tag and GitHub Release are automated. The release workflow rejects any tag that does not exactly match the package version at the tagged source.
